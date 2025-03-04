@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+default-members = ["crates/spider"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+authors = ["joshradin <jradin16@gmail.com>"]
+description = "Spider build system"
+categories = []

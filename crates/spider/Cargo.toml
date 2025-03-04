@@ -1,0 +1,8 @@
+[package]
+name = "spider"
+description.workspace = true
+version.workspace = true
+edition.workspace = true
+
+authors.workspace = true
+categories.workspace = true
