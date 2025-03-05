@@ -6,6 +6,9 @@ use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+mod factory;
+pub use factory::*;
+
 /// Provides a value
 pub trait Provider<T: Send>: Clone + Send + Sync {
     fn get(&self) -> impl Future<Output=T> + Send {
@@ -19,81 +22,6 @@ pub trait Provider<T: Send>: Clone + Send + Sync {
         Self: 'static,
     {
         BoxProvider::new(self)
-    }
-}
-
-#[derive(Debug)]
-pub struct ProviderFactory<S> {
-    state: Arc<S>,
-}
-
-impl ProviderFactory<()> {
-    /// Creates a new empty provider
-    pub(crate) fn new() -> Self {
-        Self {
-            state: Arc::new(()),
-        }
-    }
-}
-
-impl<S> ProviderFactory<S> {
-    /// Creates a provider that just generates a value from a future
-    pub fn provider<T, U>(&self, just: U) -> impl Provider<T> + Clone + use < T, S, U >
-    where
-        T: Send + Clone,
-        U: IntoFuture<Output=T, IntoFuture: Send + 'static>,
-    {
-        JustProvider {
-            inner: Arc::new(Mutex::new(JustProviderInner::Future(Box::pin(
-                just.into_future(),
-            )))),
-        }
-    }
-
-    /// Create a provider of a value source
-    pub fn of<Vs>(
-        &self,
-    ) -> impl Provider<Vs::Output>
-    where
-        Vs: ValueSource<Properties=(), Output: Clone> + FromState<S> + Send,
-        S: Sync + Send + 'static,
-    {
-        ValueSourceProvider::<Vs> {
-            inner: Arc::new(Mutex::new(ValueSourceProviderInner::Futures {
-                properties: {
-                    Box::pin(async move { () })
-                },
-                vs: {
-                    let state = self.state.clone();
-                    Box::pin(async move { (*state).create().await })
-                },
-                cfg_cb: Box::new(|_| {}),
-            })),
-        }
-    }
-
-    /// Create a provider of a value source
-    pub fn of_with<Vs>(
-        &self,
-        cfg: impl FnOnce(&mut Vs::Properties) + Send + Sync + 'static,
-    ) -> impl Provider<Vs::Output>
-    where
-        Vs: ValueSource<Properties: FromState<S> + Send, Output: Clone> + FromState<S> + Send,
-        S: Sync + Send + 'static,
-    {
-        ValueSourceProvider::<Vs> {
-            inner: Arc::new(Mutex::new(ValueSourceProviderInner::Futures {
-                properties: {
-                    let state = self.state.clone();
-                    Box::pin(async move { (*state).create().await })
-                },
-                vs: {
-                    let state = self.state.clone();
-                    Box::pin(async move { (*state).create().await })
-                },
-                cfg_cb: Box::new(cfg),
-            })),
-        }
     }
 }
 
@@ -238,10 +166,11 @@ impl<T: Send + 'static> BoxProvider<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::lazy::providers::{Provider, ProviderFactory};
+    use crate::lazy::providers::Provider;
     use crate::lazy::value_source::ValueSource;
     use std::time::Instant;
     use tokio::test;
+    use crate::lazy::providers::factory::ProviderFactory;
 
     #[test]
     async fn test_just_provider() {

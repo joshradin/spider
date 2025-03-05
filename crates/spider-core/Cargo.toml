@@ -9,8 +9,12 @@ categories.workspace = true
 
 [dependencies]
 futures.workspace = true
+parking_lot = { workspace = true }
 pin-project.workspace = true
 tokio = { workspace = true, features = ["sync"] }
+snafu = { workspace = true }
+static_assertions = "1.1.0"
+spider-proc_macros = { version = "0.0.0", path = "../spider-proc_macros"}
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"]}

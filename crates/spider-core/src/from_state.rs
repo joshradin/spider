@@ -17,8 +17,6 @@ pub trait Create<T> {
     fn create(&self) -> impl Future<Output=T> + Send;
 }
 
-
-
 impl<T: FromState<S>, S: Sync> Create<T> for S {
     async fn create(&self) -> T {
         T::from_state(self).await

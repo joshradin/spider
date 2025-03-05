@@ -1,9 +1,6 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! # `spider-fs`
+//!
+//! File system providers and metadata
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod file;
 
-}

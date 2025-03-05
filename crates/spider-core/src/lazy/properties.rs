@@ -102,9 +102,9 @@ impl<T> Display for Property<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::lazy::providers::ProviderFactory;
     use super::*;
     use tokio::test;
+    use crate::lazy::providers::ProviderFactory;
 
     #[test]
     async fn test_prop_from_provider() {

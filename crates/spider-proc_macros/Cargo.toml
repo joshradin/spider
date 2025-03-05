@@ -1,5 +1,5 @@
 [package]
-name = "spider-fs"
+name = "spider-proc_macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,6 +7,10 @@ authors.workspace = true
 description.workspace = true
 categories.workspace = true
 
+[lib]
+proc-macro = true
+
 [dependencies]
-spider-core = { workspace = true }
-tokio = { workspace = true, features = ["fs"]}
+syn = "2.0.99"
+quote = "1.0.39"
+proc-macro2 = "1.0.94"
