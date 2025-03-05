@@ -1,2 +1,5 @@
 target/
 .idea/
+
+# don't store Cargo.lock
+Cargo.lock

@@ -1,0 +1,11 @@
+[package]
+name = "spider-fs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description.workspace = true
+categories.workspace = true
+
+[dependencies]
+spider-core = { version = "0.0.0", path = "../spider-core" }

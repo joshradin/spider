@@ -1,0 +1,16 @@
+[package]
+name = "spider-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description.workspace = true
+categories.workspace = true
+
+[dependencies]
+futures.workspace = true
+pin-project.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"]}
