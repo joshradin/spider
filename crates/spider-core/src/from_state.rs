@@ -2,7 +2,7 @@
 
 /// Create some value of type [`Self::Output`] from state `S`
 pub trait FromState<S> {
-    async fn from_state(state: &S) -> Self;
+    fn from_state(state: &S) -> impl Future<Output=Self> + Send;
 }
 
 impl<T: Default> FromState<()> for T {
@@ -14,12 +14,12 @@ impl<T: Default> FromState<()> for T {
 /// Create the specified object from this state
 pub trait Create<T> {
     /// Create a value of type T from input states
-    async fn create(&self) -> T;
+    fn create(&self) -> impl Future<Output=T> + Send;
 }
 
 
 
-impl<T: FromState<S>, S> Create<T> for S {
+impl<T: FromState<S>, S: Sync> Create<T> for S {
     async fn create(&self) -> T {
         T::from_state(self).await
     }

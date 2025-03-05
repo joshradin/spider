@@ -1,8 +1,9 @@
 /// A value source
-pub trait ValueSource<T: Send, P: Sync = ()> {
-    type Fut: Future<Output = T> + Send;
+pub trait ValueSource {
+    type Properties: Send + Sync;
+    type Output: Send + Sync;
 
     /// Get a value from the given properties
-    fn get(self, properties: &P) -> Self::Fut;
+    fn get(self, properties: &Self::Properties) -> impl Future<Output=Option<Self::Output>> + Send;
 }
 

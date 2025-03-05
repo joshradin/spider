@@ -1,3 +1,4 @@
+use crate::from_state::{Create, FromState};
 use crate::lazy::value_source::ValueSource;
 use futures::future::BoxFuture;
 use pin_project::pin_project;
@@ -7,7 +8,10 @@ use tokio::sync::Mutex;
 
 /// Provides a value
 pub trait Provider<T: Send>: Clone + Send + Sync {
-    fn get(&self) -> impl Future<Output = T> + Send;
+    fn get(&self) -> impl Future<Output=T> + Send {
+        async { self.try_get().await.expect("value is not ready yet") }
+    }
+    fn try_get(&self) -> impl Future<Output=Option<T>> + Send;
 
     fn into_boxed(self) -> BoxProvider<T>
     where
@@ -18,17 +22,26 @@ pub trait Provider<T: Send>: Clone + Send + Sync {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ProviderFactory<S> {
-    state: S,
+    state: Arc<S>,
+}
+
+impl ProviderFactory<()> {
+    /// Creates a new empty provider
+    pub(crate) fn new() -> Self {
+        Self {
+            state: Arc::new(()),
+        }
+    }
 }
 
 impl<S> ProviderFactory<S> {
     /// Creates a provider that just generates a value from a future
-    pub fn provider<T, U>(&self, just: U) -> impl Provider<T> + Clone + use<T, S, U>
+    pub fn provider<T, U>(&self, just: U) -> impl Provider<T> + Clone + use < T, S, U >
     where
         T: Send + Clone,
-        U: IntoFuture<Output = T, IntoFuture: Send + 'static>,
+        U: IntoFuture<Output=T, IntoFuture: Send + 'static>,
     {
         JustProvider {
             inner: Arc::new(Mutex::new(JustProviderInner::Future(Box::pin(
@@ -36,10 +49,112 @@ impl<S> ProviderFactory<S> {
             )))),
         }
     }
+
+    /// Create a provider of a value source
+    pub fn of<Vs>(
+        &self,
+    ) -> impl Provider<Vs::Output>
+    where
+        Vs: ValueSource<Properties=(), Output: Clone> + FromState<S> + Send,
+        S: Sync + Send + 'static,
+    {
+        ValueSourceProvider::<Vs> {
+            inner: Arc::new(Mutex::new(ValueSourceProviderInner::Futures {
+                properties: {
+                    Box::pin(async move { () })
+                },
+                vs: {
+                    let state = self.state.clone();
+                    Box::pin(async move { (*state).create().await })
+                },
+                cfg_cb: Box::new(|_| {}),
+            })),
+        }
+    }
+
+    /// Create a provider of a value source
+    pub fn of_with<Vs>(
+        &self,
+        cfg: impl FnOnce(&mut Vs::Properties) + Send + Sync + 'static,
+    ) -> impl Provider<Vs::Output>
+    where
+        Vs: ValueSource<Properties: FromState<S> + Send, Output: Clone> + FromState<S> + Send,
+        S: Sync + Send + 'static,
+    {
+        ValueSourceProvider::<Vs> {
+            inner: Arc::new(Mutex::new(ValueSourceProviderInner::Futures {
+                properties: {
+                    let state = self.state.clone();
+                    Box::pin(async move { (*state).create().await })
+                },
+                vs: {
+                    let state = self.state.clone();
+                    Box::pin(async move { (*state).create().await })
+                },
+                cfg_cb: Box::new(cfg),
+            })),
+        }
+    }
+}
+
+enum ValueSourceProviderInner<Vs: ValueSource> {
+    Poisoned,
+    Futures {
+        properties: BoxFuture<'static, Vs::Properties>,
+        vs: BoxFuture<'static, Vs>,
+        cfg_cb: Box<dyn FnOnce(&mut Vs::Properties) + Send + Sync>,
+    },
+    Gotten(Option<Vs::Output>),
+}
+
+struct ValueSourceProvider<Vs: ValueSource> {
+    inner: Arc<Mutex<ValueSourceProviderInner<Vs>>>,
+}
+
+impl<Vs: ValueSource> Clone for ValueSourceProvider<Vs> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<Vs: ValueSource + Send> Provider<Vs::Output> for ValueSourceProvider<Vs>
+where
+    Vs::Output: Clone,
+{
+    async fn try_get(&self) -> Option<Vs::Output> {
+        let mut lock = self.inner.lock().await;
+        match &mut *lock {
+            ValueSourceProviderInner::Futures { .. } => {
+                let ValueSourceProviderInner::Futures {
+                    mut properties,
+                    mut vs,
+                    cfg_cb,
+                } = std::mem::replace(&mut *lock, ValueSourceProviderInner::Poisoned)
+                else {
+                    unreachable!()
+                };
+                let mut properties = properties.as_mut().await;
+                let vs = vs.await;
+
+                cfg_cb(&mut properties);
+
+                let value = vs.get(&properties).await;
+                *lock = ValueSourceProviderInner::Gotten(value.clone());
+                value
+            }
+            ValueSourceProviderInner::Gotten(t) => {
+                t.clone()
+            }
+            _ => {
+                panic!("value panicked")
+            }
+        }
+    }
 }
 
 /// Provide just a value
-
 #[pin_project]
 enum JustProviderInner<T> {
     Future(BoxFuture<'static, T>),
@@ -59,15 +174,15 @@ impl<T> Clone for JustProvider<T> {
 }
 
 impl<T: Send + Clone> Provider<T> for JustProvider<T> {
-    async fn get(&self) -> T {
+    async fn try_get(&self) -> Option<T> {
         let mut inner = self.inner.lock().await;
         match &mut *inner {
             JustProviderInner::Future(fut) => {
                 let gotten = fut.await;
                 *inner = JustProviderInner::Gotten(gotten.clone());
-                gotten
+                Some(gotten)
             }
-            JustProviderInner::Gotten(g) => g.clone(),
+            JustProviderInner::Gotten(g) => Some(g.clone()),
         }
     }
 }
@@ -75,11 +190,12 @@ impl<T: Send + Clone> Provider<T> for JustProvider<T> {
 /// A box provider, wrapping any provider type
 pub struct BoxProvider<T> {
     any: Arc<dyn Any + Send + Sync>,
-    vtable: Arc<dyn for<'a> Fn(&'a (dyn Any + Send + Sync)) -> BoxFuture<'a, T> + Send + Sync>,
+    vtable:
+        Arc<dyn for<'a> Fn(&'a (dyn Any + Send + Sync)) -> BoxFuture<'a, Option<T>> + Send + Sync>,
 }
 
 impl<T: Send + Sync> Provider<T> for BoxProvider<T> {
-    fn get(&self) -> impl Future<Output = T> + Send {
+    fn try_get(&self) -> impl Future<Output=Option<T>> + Send {
         let as_any = &*self.any;
         (self.vtable)(as_any)
     }
@@ -112,7 +228,7 @@ impl<T: Send + 'static> BoxProvider<T> {
             vtable: Arc::new(|any: &(dyn Any + Send + Sync)| {
                 Box::pin(async {
                     let as_p: &P = any.downcast_ref().expect("should not fail");
-                    let t = as_p.get().await;
+                    let t = as_p.try_get().await;
                     t
                 })
             }),
@@ -123,11 +239,13 @@ impl<T: Send + 'static> BoxProvider<T> {
 #[cfg(test)]
 mod tests {
     use crate::lazy::providers::{Provider, ProviderFactory};
+    use crate::lazy::value_source::ValueSource;
+    use std::time::Instant;
     use tokio::test;
 
     #[test]
     async fn test_just_provider() {
-        let factory = ProviderFactory::<()>::default();
+        let factory = ProviderFactory::new();
         let s = factory.provider(async { 13 });
         let p = s.clone();
         assert_eq!(s.get().await, 13);
@@ -136,10 +254,30 @@ mod tests {
 
     #[test]
     async fn test_just_provider_to_boxed() {
-        let factory = ProviderFactory::<()>::default();
+        let factory = ProviderFactory::new();
         let s = factory.provider(async { 13 }).into_boxed();
         let p = s.clone();
         assert_eq!(s.get().await, 13);
         assert_eq!(p.get().await, 13);
+    }
+
+    #[derive(Default)]
+    struct InstantValueSource;
+    impl ValueSource for InstantValueSource {
+        type Properties = ();
+        type Output = Instant;
+
+        async fn get(self, properties: &Self::Properties) -> Option<Instant> {
+            Some(Instant::now())
+        }
+    }
+
+    #[test]
+    async fn test_value_source_provider() {
+        let factory = ProviderFactory::new();
+        let vs = factory.of::<InstantValueSource>();
+        let now = vs.get().await;
+        let now2 = vs.get().await;
+        assert_eq!(now, now2);
     }
 }
