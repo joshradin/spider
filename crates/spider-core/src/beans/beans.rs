@@ -1,5 +1,6 @@
-use crate::beans::{FromBeans, IntoFromBeans};
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::beans::cons::BeanConstructor;
+use crate::beans::BeansParam;
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use snafu::Snafu;
 use static_assertions::assert_impl_all;
 use std::any;
@@ -86,6 +87,21 @@ impl Beans {
         })
     }
 
+    /// gets all ids
+    pub fn get_ids(&self) -> Vec<String> {
+        self.beans.keys().cloned().collect()
+    }
+
+    /// Gets all ids of a given type
+    pub fn get_ids_of<T>(&self) -> Vec<String>
+    where
+        T: Send + Sync + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+        let ids = self.type_id_to_id.get(&type_id).cloned();
+        ids.unwrap_or_default()
+    }
+
     /// Gets all beans of a given type
     pub fn get_all<T>(&self) -> BeanRefIter<T>
     where
@@ -143,20 +159,34 @@ impl Beans {
     }
 
     /// Create a bean and insert
-    pub fn init<T, Marker>(&mut self, name: impl AsRef<str>, cons: impl IntoFromBeans<T, Marker>) -> Result<()>
+    pub fn init<T, Marker>(
+        &mut self,
+        name: impl AsRef<str>,
+        cons: impl BeanConstructor<Marker, Out = T>,
+    ) -> Result<()>
     where
-        T: Send + Sync + 'static
+        T: Send + Sync + 'static,
     {
-        todo!()
+        let cons = self.create(cons)?;
+        self.insert(name, cons)
     }
 
     /// Create a value from some beans
-    pub fn create<T, Marker>(&self, cons: impl IntoFromBeans<T, Marker>) -> Result<T>
+    pub fn create<T, Marker>(&mut self, cons: impl BeanConstructor<Marker, Out = T>) -> Result<T>
     where
-        T: Send + Sync + 'static
+        T: Send + Sync + 'static,
     {
-        let mut into = cons.into_create_from_beans();
-        into.create_from_beans(self)
+        self._create(cons)
+    }
+
+    fn _create<T, Marker, P: BeansParam>(
+        &mut self,
+        mut cons: impl BeanConstructor<Marker, Params=P, Out=T>,
+    ) -> Result<T> {
+        let mut state = P::init_state(self);
+        let params = P::get_param(&mut state, self)?;
+
+        cons.build(params)
     }
 }
 
@@ -182,6 +212,7 @@ pub struct BeanRef<'a, T> {
     object: RwLockReadGuard<'a, Box<dyn Any + Send + Sync>>,
     _ty: PhantomData<fn() -> &'a T>,
 }
+
 
 impl<'a, T: Debug + 'static> Debug for BeanRef<'a, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -241,6 +272,7 @@ impl<'a, T: 'static> DerefMut for BeanMut<'a, T> {
 
 /// An error occurred using beans
 #[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
 pub enum BeanError {
     #[snafu(display("bean with id {name} already exists"))]
     AlreadyExists {
@@ -262,6 +294,7 @@ pub enum BeanError {
 }
 
 pub type Result<T> = std::result::Result<T, BeanError>;
+pub type BeanResult<T> = std::result::Result<T, BeanError>;
 
 pub struct BeanRefIter<'a, T> {
     beans: &'a Beans,
@@ -300,6 +333,7 @@ assert_impl_all!(BeanMutIter<'static, ()>: Iterator<Item=BeanMut<'static, ()>>);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::beans::Multi;
     use crate::lazy::providers::ProviderFactory;
 
     #[test]
@@ -344,8 +378,21 @@ mod tests {
     #[test]
     fn test_create_from_beans() {
         let mut beans = Beans::new();
-        // beans.init("test", || {
-        //     "Hello, world"
-        // }).unwrap()
+
+        fn immediate() -> BeanResult<i32> {
+            Ok(1)
+        }
+
+        fn sum(all: Multi<&i32>) -> BeanResult<i32> {
+            Ok(all.iter().map(|s| *s).sum())
+        }
+
+        beans.init("a", immediate).expect("could not create a");
+        beans.init("b", immediate).expect("could not create b");
+        beans.init("c", immediate).expect("could not create b");
+        assert_eq!(*beans.get::<i32>("a").unwrap(), 1);
+        let sum = beans.create(sum).expect("could not create sum");
+        assert_eq!(sum, 3);
+
     }
 }
