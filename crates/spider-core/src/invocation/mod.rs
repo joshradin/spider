@@ -5,6 +5,7 @@ use std::env::current_dir;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use crate::beans::{BeanConstructor, BeanParamSet, Beans, BeansParam};
 
 pub trait InvocationDetails {
     /// The current directory of the invocation
@@ -32,6 +33,7 @@ impl InvocationDetails for SpiderInvocationDetails {
 #[derive(Debug)]
 pub struct Spider {
     details: Arc<SpiderInvocationDetails>,
+    beans: Beans,
 }
 
 impl Default for Spider {
@@ -54,7 +56,23 @@ impl Spider {
         }
         Ok(Spider {
             details: Arc::new(SpiderInvocationDetails::new(path.to_path_buf())),
+            beans: Beans::new(),
         })
+    }
+
+    /// Gets the beans object
+    pub(crate) fn beans(&self) -> &Beans {
+        &self.beans
+    }
+
+    /// Gets a mutable reference to the beans object
+    pub(crate) fn beans_mut(&mut self) -> &mut Beans {
+        &mut self.beans
+    }
+
+    /// Gets an objects creator
+    pub fn objects(&self) -> Objects {
+        Objects(&self.beans)
     }
 }
 
@@ -69,4 +87,19 @@ impl SpiderAware for Spider {
 pub trait SpiderAware {
     /// Gets a reference to the spider instance
     fn get_spider(&self) -> &Spider;
+}
+
+
+pub struct Objects<'a>(&'a Beans);
+
+
+
+impl<'a> Objects<'a> {
+
+    /// Create an object
+    pub fn create<T: Send + Sync + 'static, Marker>(&self, cons: impl BeanConstructor<Marker, Out=T>) -> T {
+        let Objects(beans) = self;
+
+        beans.create(cons).unwrap()
+    }
 }

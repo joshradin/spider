@@ -11,7 +11,7 @@ pub trait BeansParam: Sized {
     type State: Send + Sync + 'static;
     type Item<'beans, 'state>: BeansParam<State = Self::State>;
 
-    fn init_state(beans: &mut Beans) -> Self::State;
+    fn init_state(beans: &Beans) -> Self::State;
 
     fn get_param<'beans, 'state>(
         state: &'state mut Self::State,
@@ -32,7 +32,7 @@ macro_rules! impl_bean_param {
             type State = ($($T::State,)*);
             type Item<'beans, 'state> = ($($T::Item<'beans, 'state>,)*);
 
-            fn init_state(beans: &mut Beans) -> Self::State {
+            fn init_state(beans: &Beans) -> Self::State {
                 (
                     $($T::init_state(beans),)*
                 )
@@ -65,7 +65,7 @@ macro_rules! impl_bean_param_set {
             type State = ($($T::State,)*);
             type Item<'beans, 'state> = ($($T::Item<'beans, 'state>,)*);
 
-            fn init_state(beans: &mut Beans) -> Self::State {
+            fn init_state(beans: &Beans) -> Self::State {
                 (
                     $($T::init_state(beans),)*
                 )

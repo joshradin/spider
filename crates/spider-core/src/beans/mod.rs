@@ -6,4 +6,4 @@ mod cons;
 mod beans_query;
 mod bean_query_iter;
 
-pub use self::{beans::*, beans_param::*};
+pub use self::{beans::*, beans_param::*, cons::BeanConstructor};

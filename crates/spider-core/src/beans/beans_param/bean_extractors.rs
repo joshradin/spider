@@ -36,7 +36,7 @@ impl<T: QueryData> BeansParam for Multi<'_, '_, T> {
     type State = ();
     type Item<'beans, 'state> = Multi<'beans, 'state, T>;
 
-    fn init_state(_beans: &mut Beans) -> Self::State {
+    fn init_state(_beans: &Beans) -> Self::State {
     }
 
     fn get_param<'beans, 'state>(_state: &'state mut Self::State, beans: &'beans Beans) -> Result<Self::Item<'beans, 'state>, BeanError> {

@@ -61,7 +61,39 @@ macro_rules! impl_from_beans_function {
     }
 }
 
-all_tuples!(impl_from_beans_function, 0, 16, T);
+macro_rules! impl_from_beans_function_infallible {
+    ($($T:ident),*) => {
+        impl<Out, Func, $($T),*> FromBeansFunction<fn($($T),*) -> Out> for Func
+            where
+                $($T: BeansParam,)*
+                Func: Send + Sync + 'static,
+                for<'a> &'a mut Func: FnMut($($T),*) -> Out +  FnMut($(<$T as BeansParam>::Item<'_, '_>),*) -> Out,
+                Out: 'static,
 
-assert_impl_all!(fn() -> Result<(), BeanError>: FromBeansFunction<fn() -> ()>);
-assert_impl_all!(fn((), ()) -> Result<(), BeanError>: FromBeansFunction<fn((), ()) -> ()>);
+        {
+            type Output = Out;
+            type Params = BeanParamSet<($($T,)*)>;
+
+            #[inline]
+            fn run<'beans, 'state>(&mut self, param: <Self::Params as BeansParam>::Item<'_, '_>) -> Result<Out, BeanError> {
+                #[allow(clippy::too_many_arguments)]
+                fn call_inner<'b, 's, Out, $($T: BeansParam,)*>(
+                    mut f: impl FnMut($($T,)*)->Out,
+                    $($T: $T,)*
+                )->Out{
+                    f($($T,)*)
+                }
+                #[allow(non_snake_case)]
+                let ($($T,)*) = param;
+                Ok(call_inner(self, $($T),*))
+            }
+        }
+    }
+}
+
+
+// all_tuples!(impl_from_beans_function, 0, 16, T);
+all_tuples!(impl_from_beans_function_infallible, 0, 16, T);
+
+assert_impl_all!(fn() -> (): FromBeansFunction<fn() -> ()>);
+assert_impl_all!(fn((), ()) -> (): FromBeansFunction<fn((), ()) -> ()>);

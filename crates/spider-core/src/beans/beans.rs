@@ -172,7 +172,7 @@ impl Beans {
     }
 
     /// Create a value from some beans
-    pub fn create<T, Marker>(&mut self, cons: impl BeanConstructor<Marker, Out = T>) -> Result<T>
+    pub fn create<T, Marker>(&self, cons: impl BeanConstructor<Marker, Out = T>) -> Result<T>
     where
         T: Send + Sync + 'static,
     {
@@ -180,7 +180,7 @@ impl Beans {
     }
 
     fn _create<T, Marker, P: BeansParam>(
-        &mut self,
+        &self,
         mut cons: impl BeanConstructor<Marker, Params=P, Out=T>,
     ) -> Result<T> {
         let mut state = P::init_state(self);
@@ -379,19 +379,19 @@ mod tests {
     fn test_create_from_beans() {
         let mut beans = Beans::new();
 
-        fn immediate() -> BeanResult<i32> {
-            Ok(1)
+        fn immediate() ->  i32 {
+            1
         }
 
-        fn sum(all: Multi<&i32>) -> BeanResult<i32> {
-            Ok(all.iter().map(|s| *s).sum())
+        fn sum(all: Multi<&i32>) -> i32 {
+            all.iter().map(|s| *s).sum()
         }
 
         beans.init("a", immediate).expect("could not create a");
         beans.init("b", immediate).expect("could not create b");
         beans.init("c", immediate).expect("could not create b");
         assert_eq!(*beans.get::<i32>("a").unwrap(), 1);
-        let sum = beans.create(sum).expect("could not create sum");
+        let sum = beans.create(sum).unwrap();
         assert_eq!(sum, 3);
 
     }
