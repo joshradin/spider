@@ -5,7 +5,6 @@ use std::fs::Metadata;
 use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
-use spider_core::invocation::InvocationDetails;
 use spider_core::lazy::providers::{Provider, ProviderFactory};
 use crate::file::{FileSystemLocation, RegularFile};
 

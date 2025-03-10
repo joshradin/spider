@@ -1,7 +1,7 @@
 use crate::lazy::providers::{BoxProvider, Provider};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 struct ProviderInner<T> {
     state: ProviderState<T>,
@@ -65,8 +65,8 @@ impl<T> Clone for Property<T> {
 }
 
 impl<T: Send + Sync + Clone> Provider<T> for Property<T> {
-    async fn get(&self) -> T {
-        match self.try_get().await {
+    fn get(&self) -> T {
+        match self.try_get() {
             None => {
                 panic!("{} has no value available", self)
             }
@@ -74,12 +74,12 @@ impl<T: Send + Sync + Clone> Provider<T> for Property<T> {
         }
     }
 
-    async fn try_get(&self) -> Option<T> {
-        let mut inner = self.inner.lock().await;
+    fn try_get(&self) -> Option<T> {
+        let mut inner = self.inner.lock();
         match &mut inner.state {
             ProviderState::Empty => None,
             ProviderState::Provider(p) => {
-                let value = p.get().await;
+                let value = p.get();
                 inner.state = ProviderState::Ready(value.clone());
                 Some(value)
             }
@@ -103,23 +103,22 @@ impl<T> Display for Property<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::test;
     use crate::lazy::providers::ProviderFactory;
 
     #[test]
-    async fn test_prop_from_provider() {
+    fn test_prop_from_provider() {
         let factory = ProviderFactory::new();
-        let provider = factory.provider(async { "hello, world!" });
+        let provider = factory.provider(|| { "hello, world!" });
         let property = Property::from(provider, None);
         assert_eq!(property.id, None);
-        assert_eq!(property.get().await, "hello, world!");
+        assert_eq!(property.get(), "hello, world!");
     }
 
     #[test]
-    async fn test_prop_from_prop() {
+    fn test_prop_from_prop() {
         let factory = ProviderFactory::new();
         let provider = Property::immediate("hello, world!", None);
         let property = Property::from(provider, "provider2".to_string());
-        assert_eq!(property.get().await, "hello, world!");
+        assert_eq!(property.get(), "hello, world!");
     }
 }

@@ -1,9 +1,7 @@
-use crate::from_state::{Create, FromState};
 use crate::lazy::providers::{JustProvider, JustProviderInner, Provider, ValueSourceProvider, ValueSourceProviderInner};
 use crate::lazy::value_source::ValueSource;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-
+use parking_lot::Mutex;
 
 #[derive(Debug)]
 pub struct ProviderFactory();
@@ -20,12 +18,11 @@ impl ProviderFactory {
     pub fn provider<T, U>(&self, just: U) -> impl Provider<T> + Clone + use < T, U >
     where
         T: Send + Clone,
-        U: IntoFuture<Output=T, IntoFuture: Send + 'static>,
+        U: Fn() -> T + Send + 'static,
     {
         JustProvider {
-            inner: Arc::new(Mutex::new(JustProviderInner::Future(Box::pin(
-                just.into_future(),
-            )))),
+            inner: Arc::new(Mutex::new(JustProviderInner::Future(Box::new(just)),
+            )),
         }
     }
 
@@ -39,12 +36,12 @@ impl ProviderFactory {
         ValueSourceProvider::<Vs> {
             inner: Arc::new(Mutex::new(ValueSourceProviderInner::Futures {
                 properties: {
-                    Box::pin(async move { () })
+                    todo!()
                 },
                 vs: {
                     // let state = self.state.clone();
                     // Box::pin(async move { (*state).create().await })
-                    Box::pin(async move { ( todo!()) })
+                    todo!()
                 },
                 cfg_cb: Box::new(|_| {}),
             })),

@@ -9,4 +9,3 @@ categories.workspace = true
 
 [dependencies]
 spider-core = { workspace = true }
-tokio = { workspace = true, features = ["fs"]}

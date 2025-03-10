@@ -9,7 +9,7 @@ impl<P: Provider<RegularFile>> RegularFileProvider for P {}
 
 #[cfg(test)]
 mod tests {
-    use spider_core::invocation::Spider;
+    use spider_core::invocation::spider::Spider;
 
     #[test]
     fn test_regular_file_provider() {

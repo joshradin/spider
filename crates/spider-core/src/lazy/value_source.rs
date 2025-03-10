@@ -4,6 +4,6 @@ pub trait ValueSource {
     type Output: Send + Sync;
 
     /// Get a value from the given properties
-    fn get(self, properties: &Self::Properties) -> impl Future<Output=Option<Self::Output>> + Send;
+    fn get(self, properties: &Self::Properties) -> Option<Self::Output>;
 }
 

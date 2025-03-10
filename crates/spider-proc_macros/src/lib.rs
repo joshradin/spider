@@ -143,30 +143,3 @@ fn fake_variadic_attrs(len: usize, i: usize) -> TokenStream2 {
         _ => quote! { #[cfg_attr(#cfg, doc(hidden))] },
     }
 }
-
-
-
-#[proc_macro_attribute]
-pub fn inject(attribute: TokenStream, body: TokenStream) -> TokenStream {
-    let function = parse_macro_input!(body as ItemFn);
-
-    let params = function.sig.inputs
-        .iter()
-        .map(|arg| {
-            match arg {
-                FnArg::Receiver(_) => {
-                    panic!("inject function should not have receiver arguments")
-                }
-                FnArg::Typed(t) => {
-                    let bean_id = t.attrs.iter()
-                        .find(|attr| { attr.meta.path().is_ident("bean") } )
-                        .map(|attr| { attr.parse_args::<Ident>() })
-                        ;
-                }
-            }
-        });
-
-    quote! {
-
-    }.into()
-}
