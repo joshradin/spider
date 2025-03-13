@@ -1,23 +1,21 @@
-use crate::lazy::providers::{BoxProvider, Provider};
+use crate::lazy::providers::{Provider, Provides};
+use parking_lot::Mutex;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-use parking_lot::Mutex;
+use crate::lazy::properties::sealed::Sealed;
 
-struct ProviderInner<T> {
-    state: ProviderState<T>,
-}
-
-enum ProviderState<T> {
-    Empty,
-    Provider(BoxProvider<T>),
-    Ready(T),
+enum PropertyState<T: Clone> {
+    None,
+    Provider(Provider<T>),
+    Immediate(T),
 }
 
 /// A property that stores a value of some type `T`, which can either be directly set or have it set
 /// from a [`Provider`].
-pub struct Property<T> {
+#[derive(Clone)]
+pub struct Property<T: Clone> {
     id: Option<String>,
-    inner: Arc<Mutex<ProviderInner<T>>>,
+    inner: Arc<Mutex<PropertyState<T>>>,
 }
 
 impl<T: Send + Sync + Clone> Property<T> {
@@ -25,46 +23,14 @@ impl<T: Send + Sync + Clone> Property<T> {
         let id = id.into();
         Self {
             id,
-            inner: Arc::new(Mutex::new(ProviderInner {
-                state: ProviderState::Empty,
-            })),
-        }
-    }
-
-    pub(crate) fn immediate(inner: T, id: impl Into<Option<String>>) -> Self {
-        let id = id.into();
-        Self {
-            id,
-            inner: Arc::new(Mutex::new(ProviderInner {
-                state: ProviderState::Ready(inner),
-            })),
-        }
-    }
-
-    pub(crate) fn from(inner: impl Provider<T> + 'static, id: impl Into<Option<String>>) -> Self
-    where
-        T: 'static,
-    {
-        let id = id.into();
-        Self {
-            id,
-            inner: Arc::new(Mutex::new(ProviderInner {
-                state: ProviderState::Provider(inner.into_boxed()),
-            })),
+            inner: Arc::new(Mutex::new(PropertyState::None)),
         }
     }
 }
 
-impl<T> Clone for Property<T> {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id.clone(),
-            inner: self.inner.clone(),
-        }
-    }
-}
+impl<T: Send + Sync + Clone> Provides for Property<T> {
+    type Output = T;
 
-impl<T: Send + Sync + Clone> Provider<T> for Property<T> {
     fn get(&self) -> T {
         match self.try_get() {
             None => {
@@ -76,29 +42,59 @@ impl<T: Send + Sync + Clone> Provider<T> for Property<T> {
 
     fn try_get(&self) -> Option<T> {
         let mut inner = self.inner.lock();
-        match &mut inner.state {
-            ProviderState::Empty => None,
-            ProviderState::Provider(p) => {
-                let value = p.get();
-                inner.state = ProviderState::Ready(value.clone());
-                Some(value)
-            }
-            ProviderState::Ready(value) => Some(value.clone()),
+        match &*inner {
+            PropertyState::None => { None }
+            PropertyState::Provider(p) => { p.try_get() }
+            PropertyState::Immediate(i) => { Some(i.clone()) }
         }
     }
 }
 
-impl<T> Debug for Property<T> {
+impl<T: Clone> Debug for Property<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "property {}", self.id.as_ref().map(String::as_str).unwrap_or("?"))
+        write!(
+            f,
+            "property {}",
+            self.id.as_ref().map(String::as_str).unwrap_or("?")
+        )
     }
 }
 
-impl<T> Display for Property<T> {
+impl<T: Clone> Display for Property<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self, f)
     }
 }
+
+pub trait SetProperty<T> : Sealed {
+    fn set(&mut self, value: T);
+}
+
+impl<T: Clone + Send + Sync> SetProperty<T> for Property<T> {
+    fn set(&mut self, value: T) {
+        *self.inner.lock() = PropertyState::Immediate(value);
+    }
+}
+
+
+impl<T: Clone + Send + Sync + 'static> SetProperty<&Property<T>> for Property<T> {
+    fn set(&mut self, value: &Property<T>) {
+        *self.inner.lock() = PropertyState::Provider(Provider::from(value.clone()))
+    }
+}
+
+impl<T: Clone + Send + Sync> SetProperty<&Provider<T>> for Property<T> {
+    fn set(&mut self, value: &Provider<T>) {
+        *self.inner.lock() = PropertyState::Provider(value.clone())
+    }
+}
+mod sealed {
+    use crate::lazy::properties::Property;
+
+    pub trait Sealed {}
+    impl<T: Clone> Sealed for Property<T> {}
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -107,18 +103,24 @@ mod tests {
 
     #[test]
     fn test_prop_from_provider() {
-        let factory = ProviderFactory::new();
-        let provider = factory.provider(|| { "hello, world!" });
-        let property = Property::from(provider, None);
-        assert_eq!(property.id, None);
-        assert_eq!(property.get(), "hello, world!");
+        let factory = ProviderFactory::new(());
+        let provider = factory.provider(|| "hello, world!");
+
+        let mut property: Property<&str> = Property::empty(None);
+        assert_eq!(property.try_get(), None);
+        property.set(&provider);
+        assert_eq!(property.try_get(), Some("hello, world!"));
     }
 
     #[test]
     fn test_prop_from_prop() {
-        let factory = ProviderFactory::new();
-        let provider = Property::immediate("hello, world!", None);
-        let property = Property::from(provider, "provider2".to_string());
-        assert_eq!(property.get(), "hello, world!");
+        let factory = ProviderFactory::new(());
+        let provider = factory.provider(|| "hello, world!");
+
+        let mut property: Property<&str> = Property::empty(None);
+        property.set(&provider);
+        let mut property2: Property<&str> = Property::empty(None);
+        property2.set(&property);
+        assert_eq!(property.try_get(), Some("hello, world!"));
     }
 }

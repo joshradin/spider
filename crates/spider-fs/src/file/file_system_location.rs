@@ -1,8 +1,5 @@
 use std::fs::Metadata;
 use std::path::Path;
-use tokio::fs::File;
-use tokio::io;
-
 /// An immutable location within a file system
 pub trait FileSystemLocation {
     /// Gets the path of this file
@@ -16,10 +13,6 @@ pub trait FileSystemLocation {
         self.metadata().is_dir()
     }
 
-    /// Opens the file
-    async fn as_file(&self) -> io::Result<File> {
-        let path = self.path();
-        File::open(path).await
-    }
+
 
 }

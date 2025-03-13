@@ -1,174 +1,128 @@
-
 use crate::lazy::value_source::ValueSource;
 use std::any::Any;
-use std::sync::Arc;
-use parking_lot::Mutex;
+use std::fmt::{Debug, Formatter};
+use std::sync::{Arc, LazyLock};
 
 mod factory;
 pub use factory::*;
+use crate::lazy::properties::Property;
 
-/// Provides a value
-pub trait Provider<T: Send>: Clone + Send + Sync {
-    fn get(&self) -> T {
-        self.try_get().expect("value is not ready yet")
-    }
-    fn try_get(&self) -> Option<T>;
-
-    fn into_boxed(self) -> BoxProvider<T>
-    where
-        T: 'static,
-        Self: 'static,
-    {
-        BoxProvider::new(self)
-    }
+/// A provider of a value of type `T`.
+#[derive(Clone)]
+pub struct Provider<T: Clone> {
+    pub(super) kind: Arc<ProviderKind<T>>,
 }
 
-enum ValueSourceProviderInner<Vs: ValueSource> {
-    Poisoned,
-    Futures {
-        properties: Vs::Properties,
-        vs: Vs,
-        cfg_cb: Box<dyn FnOnce(&mut Vs::Properties) + Send + Sync>,
-    },
-    Gotten(Option<Vs::Output>),
-}
+impl<T: Clone> Provider<T> {}
 
-struct ValueSourceProvider<Vs: ValueSource> {
-    inner: Arc<Mutex<ValueSourceProviderInner<Vs>>>,
-}
-
-impl<Vs: ValueSource> Clone for ValueSourceProvider<Vs> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
+impl<T: Clone + Debug> Debug for Provider<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Provider").field(&self.try_get()).finish()
     }
 }
 
-impl<Vs: ValueSource + Send> Provider<Vs::Output> for ValueSourceProvider<Vs>
-where
-    Vs::Output: Clone,
-{
-    fn try_get(&self) -> Option<Vs::Output> {
-        let mut lock = self.inner.lock();
-        match &mut *lock {
-            ValueSourceProviderInner::Futures { .. } => {
-                let ValueSourceProviderInner::Futures {
-                    mut properties,
-                    mut vs,
-                    cfg_cb,
-                } = std::mem::replace(&mut *lock, ValueSourceProviderInner::Poisoned)
-                else {
-                    unreachable!()
-                };
-                cfg_cb(&mut properties);
+#[derive(Clone)]
+pub(super) enum ProviderKind<T: Clone> {
+    None,
+    Just(T),
+    Callable(Arc<LazyLock<Option<T>, Box<dyn FnOnce() -> Option<T> + Send + Sync>>>),
+    Provider(Provider<T>),
+}
 
-                let value = vs.get(&properties);
-                *lock = ValueSourceProviderInner::Gotten(value.clone());
-                value
-            }
-            ValueSourceProviderInner::Gotten(t) => {
-                t.clone()
-            }
-            _ => {
-                panic!("value panicked")
-            }
-        }
+impl<T: Clone + Sync + Send + 'static> From<Property<T>> for Provider<T> {
+    fn from(value: Property<T>) -> Self {
+        from_fallible_callable(move || {
+            value.try_get()
+        })
     }
 }
 
-/// Provide just a value
-enum JustProviderInner<T> {
-    Future(Box<dyn Fn() -> T + Send>),
-    Gotten(T),
-}
+impl<T: Clone> Provides for Provider<T> {
+    type Output = T;
 
-struct JustProvider<T> {
-    inner: Arc<Mutex<JustProviderInner<T>>>,
-}
-
-impl<T> Clone for JustProvider<T> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T: Send + Clone> Provider<T> for JustProvider<T> {
     fn try_get(&self) -> Option<T> {
-        let mut inner = self.inner.lock();
-        match &mut *inner {
-            JustProviderInner::Future(fut) => {
-                let gotten = fut();
-                *inner = JustProviderInner::Gotten(gotten.clone());
-                Some(gotten)
+        match &*self.kind {
+            ProviderKind::None => None,
+            ProviderKind::Just(j) => Some(j.clone()),
+            ProviderKind::Callable(c) => {
+                let lazy = Option::<T>::clone(c);
+                lazy
             }
-            JustProviderInner::Gotten(g) => Some(g.clone()),
+            ProviderKind::Provider(p) => p.try_get(),
         }
     }
 }
 
-/// A box provider, wrapping any provider type
-pub struct BoxProvider<T> {
-    any: Arc<dyn Any + Send + Sync>,
-    vtable:
-        Arc<dyn for<'a> Fn(&'a (dyn Any + Send + Sync)) ->  Option<T> + Send + Sync>,
-}
+/// A type which provides a value of type `t`.
+pub trait Provides {
+    type Output;
 
-impl<T: Send + Sync> Provider<T> for BoxProvider<T> {
-    fn try_get(&self) -> Option<T> {
-        let as_any = &*self.any;
-        (self.vtable)(as_any)
-    }
-
-    fn into_boxed(self) -> BoxProvider<T>
+    fn get(&self) -> Self::Output
     where
-        T: 'static,
-        Self: 'static,
+        Self: Debug,
     {
-        self
-    }
-}
-
-impl<T> Clone for BoxProvider<T> {
-    fn clone(&self) -> Self {
-        Self {
-            any: self.any.clone(),
-            vtable: self.vtable.clone(),
+        match self.try_get() {
+            None => {
+                panic!("{:?} has no value available", self)
+            }
+            Some(t) => t,
         }
     }
-}
 
-impl<T: Send + 'static> BoxProvider<T> {
-    pub fn new<P>(value: P) -> Self
+    fn try_get(&self) -> Option<Self::Output>;
+
+    /// Maps the output of one provider into another
+    fn map<U>(self, f: impl FnOnce(Self::Output) -> U + Send + Sync + 'static) -> Provider<U>
     where
-        P: Provider<T> + Send + Sync + 'static,
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send,
     {
-        Self {
-            any: Arc::new(value),
-            vtable: Arc::new(|any: &(dyn Any + Send + Sync)| {
-                {
-                    let as_p: &P = any.downcast_ref().expect("should not fail");
-                    let t = as_p.try_get();
-                    t
-                }
-            }),
-        }
+        from_fallible_callable(move || {
+            let t = self.try_get()?;
+            let u = f(t);
+            Some(u)
+        })
+    }
+
+    /// Maps the output of one provider into another
+    fn and_then<U>(self, f: impl FnOnce(Self::Output) -> Option<U> + Send + Sync + 'static) -> Provider<U>
+    where
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send,
+    {
+        from_fallible_callable(move || {
+            let t = self.try_get()?;
+            let u = f(t);
+            u
+        })
+    }
+
+    /// Zips two providers together
+    fn zip<U>(self, other: impl Provides<Output=U> + Send + Sync + 'static) -> Provider<(Self::Output, U)>
+    where
+        Self::Output: Clone + Send + Sync + 'static,
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send,
+    {
+        from_fallible_callable(move || {
+            let t = self.try_get()?;
+            let u = other.try_get()?;
+            Some((t, u))
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::lazy::providers::Provider;
+    use crate::lazy::providers::factory::ProviderFactory;
+    use crate::lazy::providers::Provides;
     use crate::lazy::value_source::ValueSource;
     use std::time::Instant;
-    use crate::lazy::providers::factory::ProviderFactory;
 
     #[test]
-     fn test_just_provider() {
-        let factory = ProviderFactory::new();
-        let s = factory.provider(|| { 13 });
+    fn test_just_provider() {
+        let factory = ProviderFactory::new(());
+        let s = factory.provider(|| 13);
         let p = s.clone();
         assert_eq!(s.get(), 13);
         assert_eq!(p.get(), 13);
@@ -176,8 +130,8 @@ mod tests {
 
     #[test]
     fn test_just_provider_to_boxed() {
-        let factory = ProviderFactory::new();
-        let s = factory.provider(|| { 13 }).into_boxed();
+        let factory = ProviderFactory::new(());
+        let s = factory.provider(|| 13);
         let p = s.clone();
         assert_eq!(s.get(), 13);
         assert_eq!(p.get(), 13);
@@ -194,11 +148,36 @@ mod tests {
     }
 
     #[test]
-   fn test_value_source_provider() {
-        let factory = ProviderFactory::new();
-        let vs = factory.of::<InstantValueSource>();
+    fn test_value_source_provider() {
+        let factory = ProviderFactory::new(());
+        let vs = factory.of::<InstantValueSource, _>();
         let now = vs.get();
         let now2 = vs.get();
         assert_eq!(now, now2);
+    }
+
+    #[test]
+    fn test_provider_map() {
+        let factory = ProviderFactory::new(());
+        let s = factory.provider(|| 0);
+        let mapped = s.map(|i| i + 2);
+        assert_eq!(mapped.get(), 2);
+    }
+
+    #[test]
+    fn test_provider_and_then() {
+        let factory = ProviderFactory::new(());
+        let s = factory.provider(|| 0);
+        let mapped = s.and_then(|i| Some(i + 2));
+        assert_eq!(mapped.get(), 2);
+    }
+
+    #[test]
+    fn test_provider_zip() {
+        let factory = ProviderFactory::new(());
+        let s = factory.provider(|| 1);
+        let t = factory.provider(|| 2);
+        let mapped = s.zip(t);
+        assert_eq!(mapped.get(), (1, 2));
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::file::FileSystemLocation;
 use std::fmt::{Debug, Formatter};
+use std::fs;
 use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
@@ -14,9 +15,9 @@ pub struct RegularFile {
 
 impl RegularFile {
     /// Creates a regular file from a path
-    pub(crate) async fn new(path: &Path) -> std::io::Result<Self> {
+    pub(crate) fn new(path: &Path) -> std::io::Result<Self> {
         let abs_path = path.canonicalize()?;
-        let metadata = tokio::fs::metadata(abs_path).await?;
+        let metadata = fs::metadata(abs_path)?;
         Ok(Self {
             path: path.to_path_buf(),
             metadata,

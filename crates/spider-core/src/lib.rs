@@ -3,7 +3,6 @@
 
 #![allow(async_fn_in_trait)]
 
-mod action;
 pub mod beans;
 pub mod initialization;
 pub mod invocation;
@@ -12,9 +11,11 @@ mod project;
 mod task;
 pub mod named;
 pub mod shared;
-pub mod err;
+pub mod error;
+pub mod action;
+pub mod table;
 
 
 // crate level re-exports
 #[doc(inline)]
-pub use crate::{action::*, project::*, task::*, action::*};
+pub use crate::{project::*, task::*,};
