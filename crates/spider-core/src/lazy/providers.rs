@@ -4,16 +4,14 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, LazyLock};
 
 mod factory;
-pub use factory::*;
 use crate::lazy::properties::Property;
+pub use factory::*;
 
 /// A provider of a value of type `T`.
 #[derive(Clone)]
 pub struct Provider<T: Clone> {
     pub(super) kind: Arc<ProviderKind<T>>,
 }
-
-impl<T: Clone> Provider<T> {}
 
 impl<T: Clone + Debug> Debug for Provider<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -31,14 +29,16 @@ pub(super) enum ProviderKind<T: Clone> {
 
 impl<T: Clone + Sync + Send + 'static> From<Property<T>> for Provider<T> {
     fn from(value: Property<T>) -> Self {
-        from_fallible_callable(move || {
-            value.try_get()
-        })
+        from_fallible_callable(move || value.try_get())
     }
 }
 
 impl<T: Clone> Provides for Provider<T> {
     type Output = T;
+
+    fn provider(&self) -> Provider<Self::Output> {
+        self.clone()
+    }
 
     fn try_get(&self) -> Option<T> {
         match &*self.kind {
@@ -51,11 +51,92 @@ impl<T: Clone> Provides for Provider<T> {
             ProviderKind::Provider(p) => p.try_get(),
         }
     }
+
+    fn map<U>(
+        self,
+        f: impl FnOnce(Self::Output) -> U + Send + Sync + Sized + 'static,
+    ) -> Provider<U>
+    where
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send + Sync + 'static,
+    {
+        wrap(map(self, f))
+    }
+
+    fn and_then<U>(
+        self,
+        f: impl FnOnce(Self::Output) -> Option<U> + Send + Sync + 'static,
+    ) -> Provider<U>
+    where
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send + Sync + 'static,
+    {
+        wrap(and_then(self, f))
+    }
+
+    fn zip<U>(
+        self,
+        other: impl Provides<Output = U> + Send + Sync + 'static,
+    ) -> Provider<(Self::Output, U)>
+    where
+        Self::Output: Clone + Send + Sync + 'static,
+        Self: Sized + Send + Sync + 'static,
+        U: Clone + Send + Sync + 'static,
+    {
+        todo!()
+    }
+}
+
+/// Maps the output of one provider into another
+pub fn map<P, T, U, F>(p: P, f: F) -> impl Provides<Output = U>
+where
+    P: Provides<Output = T> + Send + Sync + 'static,
+    U: Clone + Send,
+    F: FnOnce(T) -> U + Send + Sync + 'static,
+{
+    from_fallible_callable(move || {
+        let t = p.try_get()?;
+        let u = f(t);
+        Some(u)
+    })
+}
+
+/// Maps the output of one provider into another
+pub fn and_then<P, T, U, F>(p: P, f: F) -> impl Provides<Output = U>
+where
+    P: Provides<Output = T> + Send + Sync + 'static,
+    U: Clone + Send,
+    F: FnOnce(T) -> Option<U> + Send + Sync + 'static,
+{
+    from_fallible_callable(move || {
+        let t = p.try_get()?;
+        let u = f(t)?;
+        Some(u)
+    })
+}
+
+/// Maps the output of one provider into another
+pub fn zip<P1, T, P2, U>(p: P1, f: P2) -> impl Provides<Output = (T, U)>
+where
+    P1: Provides<Output = T> + Send + Sync + 'static,
+    P2: Provides<Output = U> + Send + Sync + 'static,
+    U: Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    from_fallible_callable(move || {
+        let t = p.try_get()?;
+        let u = f.try_get()?;
+        Some((t, u))
+    })
 }
 
 /// A type which provides a value of type `t`.
 pub trait Provides {
     type Output;
+
+    fn provider(&self) -> Provider<Self::Output>
+    where
+        Self::Output: Clone;
 
     fn get(&self) -> Self::Output
     where
@@ -71,38 +152,38 @@ pub trait Provides {
 
     fn try_get(&self) -> Option<Self::Output>;
 
-    /// Maps the output of one provider into another
-    fn map<U>(self, f: impl FnOnce(Self::Output) -> U + Send + Sync + 'static) -> Provider<U>
+    fn map<U>(
+        self,
+        f: impl FnOnce(Self::Output) -> U + Send + Sync + Sized + 'static,
+    ) -> impl Provides<Output = U>
     where
         Self: Sized + Send + Sync + 'static,
-        U: Clone + Send,
+        U: Clone + Send + Sync + 'static,
     {
-        from_fallible_callable(move || {
-            let t = self.try_get()?;
-            let u = f(t);
-            Some(u)
-        })
+        map(self, f)
     }
 
     /// Maps the output of one provider into another
-    fn and_then<U>(self, f: impl FnOnce(Self::Output) -> Option<U> + Send + Sync + 'static) -> Provider<U>
+    fn and_then<U>(
+        self,
+        f: impl FnOnce(Self::Output) -> Option<U> + Send + Sync + 'static,
+    ) -> impl Provides<Output = U>
     where
         Self: Sized + Send + Sync + 'static,
-        U: Clone + Send,
+        U: Clone + Send + Sync + 'static,
     {
-        from_fallible_callable(move || {
-            let t = self.try_get()?;
-            let u = f(t);
-            u
-        })
+        and_then(self, f)
     }
 
     /// Zips two providers together
-    fn zip<U>(self, other: impl Provides<Output=U> + Send + Sync + 'static) -> Provider<(Self::Output, U)>
+    fn zip<U>(
+        self,
+        other: impl Provides<Output = U> + Send + Sync + 'static,
+    ) -> impl Provides<Output = (Self::Output, U)>
     where
         Self::Output: Clone + Send + Sync + 'static,
         Self: Sized + Send + Sync + 'static,
-        U: Clone + Send,
+        U: Clone + Send + Sync + 'static,
     {
         from_fallible_callable(move || {
             let t = self.try_get()?;
@@ -114,8 +195,8 @@ pub trait Provides {
 
 #[cfg(test)]
 mod tests {
-    use crate::lazy::providers::factory::ProviderFactory;
     use crate::lazy::providers::Provides;
+    use crate::lazy::providers::factory::ProviderFactory;
     use crate::lazy::value_source::ValueSource;
     use std::time::Instant;
 

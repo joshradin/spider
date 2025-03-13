@@ -1,17 +1,14 @@
-use std::sync::Arc;
 use crate::beans::BeanProvider;
 use crate::lazy::providers::Provider;
-use crate::shared::{shared, Ref, RefMut, Shared};
+use crate::shared::{Ref, RefMut, Shared, shared};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Project {
     // tasks: Shared<TaskContainer>,
 }
 
-impl Project {
-
-}
-
+impl Project {}
 
 #[cfg(test)]
 mod tests {
@@ -19,7 +16,5 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_register_task() {
-
-    }
+    fn test_register_task() {}
 }

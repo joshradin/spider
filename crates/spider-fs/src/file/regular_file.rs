@@ -35,7 +35,6 @@ impl FileSystemLocation for RegularFile {
     }
 }
 
-
 impl Debug for RegularFile {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.path, f)

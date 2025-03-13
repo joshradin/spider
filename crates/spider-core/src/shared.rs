@@ -1,7 +1,7 @@
 //! Shared references
 
-use std::sync::Arc;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 /// A shared type that can be sent
 pub type Shared<T> = Arc<RwLock<T>>;

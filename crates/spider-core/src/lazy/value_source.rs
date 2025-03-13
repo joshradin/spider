@@ -21,7 +21,5 @@ pub fn into_callable_with<Vs>(vs: Vs, props: Vs::Properties) -> impl FnOnce() ->
 where
     Vs: ValueSource<Properties: Sized>,
 {
-    move || {
-        vs.get(&props)
-    }
+    move || vs.get(&props)
 }

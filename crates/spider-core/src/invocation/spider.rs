@@ -43,8 +43,6 @@ impl Spider {
     }
 }
 
-
-
 /// Some type that is aware of spider
 pub trait SpiderAware {
     /// Gets a reference to the spider instance

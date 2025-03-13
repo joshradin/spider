@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use spider_proc_macros::all_tuples;
+use std::marker::PhantomData;
 
 struct Foo<T> {
     phantom: PhantomData<T>,
@@ -20,6 +20,4 @@ macro_rules! impl_wrapped_in_foo {
 all_tuples!(impl_wrapped_in_foo, 0, 15, T);
 
 #[test]
-fn test_all_tuples() {
-
-}
+fn test_all_tuples() {}

@@ -1,6 +1,6 @@
 use crate::action::Action;
 use crate::table::Table;
-use crate::{error::Result, Project, Task, TaskAction, TaskError};
+use crate::{Project, Task, TaskAction, TaskError, error::Result};
 use static_assertions::assert_impl_all;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -67,9 +67,7 @@ impl TaskPrototype {
         task.set_metatable(self.table.clone());
         if let Some(action) = self.task_action() {
             let action = action.clone();
-            task.do_first(move |task: &mut Task| {
-                action.execute(task)
-            });
+            task.do_first(move |task: &mut Task| action.execute(task));
         }
         (&self.constructor)(&mut task, &self)?;
         Ok(task)
@@ -162,9 +160,7 @@ mod tests {
             Ok(())
         });
 
-        let mut spawn = child
-            .build("task", &project)
-            .expect("could not build task");
+        let mut spawn = child.build("task", &project).expect("could not build task");
         let a: i32 = *spawn.get("v").unwrap();
         assert_eq!(a, 9);
         spawn.run().expect("could not run task");

@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{parse_macro_input, Attribute, Error, FnArg, Ident, ItemFn, LitInt, LitStr, Result};
+use syn::{Attribute, Error, FnArg, Ident, ItemFn, LitInt, LitStr, Result, parse_macro_input};
 
 struct AllTuples {
     fake_variadic: bool,

@@ -39,7 +39,6 @@ impl Debug for CustomError {
 
 impl std::error::Error for CustomError {}
 
-
 pub struct Error {
     pub kind: ErrorKind,
     pub thread_name: String,
@@ -70,20 +69,18 @@ impl Display for Error {
 }
 
 macro_rules! create_error {
-    ($kind:expr) => {
-        {
-            let thread = std::thread::current();
-            Self {
-                kind: $kind,
-                thread_name: thread
-                    .name()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| format!("{:?}", thread.id())),
-                location: Location::caller().clone(),
-                trace: Backtrace::capture(),
-            }
+    ($kind:expr) => {{
+        let thread = std::thread::current();
+        Self {
+            kind: $kind,
+            thread_name: thread
+                .name()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("{:?}", thread.id())),
+            location: Location::caller().clone(),
+            trace: Backtrace::capture(),
         }
-    };
+    }};
 }
 
 impl Error {

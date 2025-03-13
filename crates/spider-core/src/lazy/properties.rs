@@ -1,8 +1,8 @@
+use crate::lazy::properties::sealed::Sealed;
 use crate::lazy::providers::{Provider, Provides};
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-use crate::lazy::properties::sealed::Sealed;
 
 enum PropertyState<T: Clone> {
     None,
@@ -28,8 +28,15 @@ impl<T: Send + Sync + Clone> Property<T> {
     }
 }
 
-impl<T: Send + Sync + Clone> Provides for Property<T> {
+impl<T: Send + Sync + Clone + 'static> Provides for Property<T> {
     type Output = T;
+
+    fn provider(&self) -> Provider<Self::Output>
+    where
+        Self::Output: Clone,
+    {
+        Provider::from(self.clone())
+    }
 
     fn get(&self) -> T {
         match self.try_get() {
@@ -43,9 +50,9 @@ impl<T: Send + Sync + Clone> Provides for Property<T> {
     fn try_get(&self) -> Option<T> {
         let mut inner = self.inner.lock();
         match &*inner {
-            PropertyState::None => { None }
-            PropertyState::Provider(p) => { p.try_get() }
-            PropertyState::Immediate(i) => { Some(i.clone()) }
+            PropertyState::None => None,
+            PropertyState::Provider(p) => p.try_get(),
+            PropertyState::Immediate(i) => Some(i.clone()),
         }
     }
 }
@@ -66,7 +73,7 @@ impl<T: Clone> Display for Property<T> {
     }
 }
 
-pub trait SetProperty<T> : Sealed {
+pub trait SetProperty<T>: Sealed {
     fn set(&mut self, value: T);
 }
 
@@ -75,7 +82,6 @@ impl<T: Clone + Send + Sync> SetProperty<T> for Property<T> {
         *self.inner.lock() = PropertyState::Immediate(value);
     }
 }
-
 
 impl<T: Clone + Send + Sync + 'static> SetProperty<&Property<T>> for Property<T> {
     fn set(&mut self, value: &Property<T>) {
@@ -94,7 +100,6 @@ mod sealed {
     pub trait Sealed {}
     impl<T: Clone> Sealed for Property<T> {}
 }
-
 
 #[cfg(test)]
 mod tests {

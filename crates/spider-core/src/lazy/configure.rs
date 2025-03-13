@@ -2,7 +2,6 @@ use static_assertions::assert_impl_all;
 
 assert_impl_all!(ConfigureOnCreate<String>: Send, Sync);
 
-
 /// A lazy type that gets configured on creation
 pub struct ConfigureOnCreate<T> {
     state: State<T>,
@@ -11,13 +10,14 @@ pub struct ConfigureOnCreate<T> {
 impl<T> ConfigureOnCreate<T> {
     /// Create a new `ConfigureOnCreate` object
     pub fn new<F>(f: F) -> Self
-        where F: FnOnce() -> T + Send + Sync + 'static
+    where
+        F: FnOnce() -> T + Send + Sync + 'static,
     {
         Self {
             state: State::Init {
                 lazy: Box::new(f),
                 configurations: vec![],
-            }
+            },
         }
     }
 

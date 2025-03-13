@@ -2,8 +2,7 @@ use crate::file::RegularFile;
 use spider_core::lazy::providers::Provider;
 
 /// A regular file provider
-pub trait RegularFileProvider: Provider<RegularFile> {
-}
+pub trait RegularFileProvider: Provider<RegularFile> {}
 
 impl<P: Provider<RegularFile>> RegularFileProvider for P {}
 
@@ -14,6 +13,5 @@ mod tests {
     #[test]
     fn test_regular_file_provider() {
         let spider = Spider::default();
-
     }
 }

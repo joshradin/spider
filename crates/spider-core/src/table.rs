@@ -1,6 +1,6 @@
 //! The [`Table`] struct, which provides a sort of pseudo inheritance mechanism
 
-use std::any::{type_name, Any, TypeId};
+use std::any::{Any, TypeId, type_name};
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -8,7 +8,7 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub struct Table {
     metatable: Option<Box<Table>>,
-    entries: HashMap<String, Value>
+    entries: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,9 @@ struct Value {
 
 impl Value {
     fn new<T>(t: T) -> Self
-    where T: Send + Sync + 'static {
+    where
+        T: Send + Sync + 'static,
+    {
         Self {
             type_id: TypeId::of::<T>(),
             type_name: type_name::<T>(),
@@ -54,37 +56,25 @@ impl Table {
     {
         if let Some(val) = self.entries.get(key) {
             match val.downcast_ref::<T>() {
-                None => {
-                    Err(
-                        TableError::TypeMismatch {
-                            key: key.to_string(),
-                            type_name: type_name::<T>(),
-                            actual_type_name: val.type_name,
-                        }
-                    )
-                }
-                Some(v) => {
-                    Ok(v)
-                }
+                None => Err(TableError::TypeMismatch {
+                    key: key.to_string(),
+                    type_name: type_name::<T>(),
+                    actual_type_name: val.type_name,
+                }),
+                Some(v) => Ok(v),
             }
         } else {
             match &self.metatable {
-                None => {
-                    Err(
-                        TableError::KeyNotFound {
-                            key: key.to_string(),
-                        }
-                    )
-                }
-                Some(mt) => {
-                    mt.get(key)
-                }
+                None => Err(TableError::KeyNotFound {
+                    key: key.to_string(),
+                }),
+                Some(mt) => mt.get(key),
             }
         }
     }
 
     /// Checks if this table contains the given key
-    pub fn contains_key(&self, key:&str) -> bool {
+    pub fn contains_key(&self, key: &str) -> bool {
         self.entries.contains_key(key)
     }
 
@@ -108,18 +98,15 @@ impl Table {
 pub enum TableError {
     /// If the key was not found
     #[error("{key:?} not found in table")]
-    KeyNotFound {
-        key: String
-    },
+    KeyNotFound { key: String },
     /// If the given entry was found, but the requested type was wrong
     #[error("{key:?} is not of type {type_name}")]
     TypeMismatch {
         key: String,
         type_name: &'static str,
-        actual_type_name: &'static str
-    }
+        actual_type_name: &'static str,
+    },
 }
-
 
 #[cfg(test)]
 mod tests {

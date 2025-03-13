@@ -3,9 +3,8 @@
 mod task;
 mod task_prototypes;
 
-use crate::error::Error;
 pub use self::{task::*, task_prototypes::*};
-
+use crate::error::Error;
 
 /// An error occurred in a task
 #[derive(Debug)]
@@ -33,7 +32,9 @@ impl TaskError {
 }
 
 impl<E> From<E> for TaskError
-where Error: From<E> {
+where
+    Error: From<E>,
+{
     fn from(value: E) -> Self {
         Self::Error(value.into())
     }
@@ -41,11 +42,12 @@ where Error: From<E> {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::ErrorKind;
     use super::*;
+    use crate::error::ErrorKind;
 
     #[test]
     fn test_fail() {
-        let result: Result<(), TaskError> = TaskError::from(ErrorKind::custom("".to_string())).fail();
+        let result: Result<(), TaskError> =
+            TaskError::from(ErrorKind::custom("".to_string())).fail();
     }
 }

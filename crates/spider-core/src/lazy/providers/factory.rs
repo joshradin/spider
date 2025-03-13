@@ -1,6 +1,6 @@
 use crate::beans::{BeanProvider, FromBeanProvider};
-use crate::lazy::providers::{Provider, ProviderKind};
-use crate::lazy::value_source::{into_callable_with, ValueSource};
+use crate::lazy::providers::{Provider, ProviderKind, Provides};
+use crate::lazy::value_source::{ValueSource, into_callable_with};
 use std::sync::{Arc, LazyLock};
 
 #[derive(Debug)]
@@ -23,7 +23,12 @@ impl<P> ProviderFactory<P> {
         from_callable(just)
     }
 
-
+    pub fn wrap<T: Clone + Send>(
+        &self,
+        provides: impl Provides<Output = T> + Send + Sync + 'static,
+    ) -> Provider<T> {
+        wrap(provides)
+    }
 
     /// Create a provider of a value source
     pub fn of<Vs, U>(&self) -> Provider<Vs::Output>
@@ -66,10 +71,16 @@ impl<P> ProviderFactory<P> {
     }
 }
 
+pub(crate) fn wrap<T: Clone + Send>(
+    provides: impl Provides<Output = T> + Sync + Send + 'static,
+) -> Provider<T> {
+    from_fallible_callable(move || provides.try_get())
+}
+
 pub(crate) fn from_callable<T, U>(just: U) -> Provider<T>
 where
     T: Send + Clone,
-    U: FnOnce() -> T + Send + Sync + 'static
+    U: FnOnce() -> T + Send + Sync + 'static,
 {
     let kind = ProviderKind::Callable(Arc::new(LazyLock::new(
         Box::new(|| Some(just())) as Box<dyn FnOnce() -> Option<T> + Send + Sync>
@@ -82,7 +93,7 @@ where
 pub(crate) fn from_fallible_callable<T, U>(just: U) -> Provider<T>
 where
     T: Send + Clone,
-    U: FnOnce() -> Option<T> + Send + Sync + 'static
+    U: FnOnce() -> Option<T> + Send + Sync + 'static,
 {
     let kind = ProviderKind::Callable(Arc::new(LazyLock::new(
         Box::new(just) as Box<dyn FnOnce() -> Option<T> + Send + Sync>

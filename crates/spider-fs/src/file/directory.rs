@@ -1,12 +1,12 @@
 //! A directory within the file system
 
+use crate::file::{FileSystemLocation, RegularFile};
+use spider_core::lazy::providers::{Provider, ProviderFactory};
 use std::fmt::{Debug, Formatter};
 use std::fs::Metadata;
 use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
-use spider_core::lazy::providers::{Provider, ProviderFactory};
-use crate::file::{FileSystemLocation, RegularFile};
 
 /// simple wrapper over a regular file
 #[derive(Clone)]
@@ -40,5 +40,3 @@ impl Debug for Directory {
         Debug::fmt(&self.0, f)
     }
 }
-
-

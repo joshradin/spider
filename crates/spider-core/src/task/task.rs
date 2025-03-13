@@ -1,16 +1,17 @@
 //! A [`Task`] represents a single, atomic instance of work
 
+use crate::Project;
 use crate::action::Action;
 use crate::error::Error;
 use crate::table::Table;
 use crate::task::TaskError::*;
-use crate::Project;
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::Weak;
 use tracing::{info, trace};
 
-pub type TaskAction = dyn for<'a> Action<&'a mut Task, Result<(), crate::task::TaskError>> + Sync + Send;
+pub type TaskAction =
+    dyn for<'a> Action<&'a mut Task, Result<(), crate::task::TaskError>> + Sync + Send;
 
 /// A fully configured task
 pub struct Task {
@@ -48,7 +49,7 @@ impl Task {
     /// Do the given action last
     pub fn do_last<A>(&mut self, action: A)
     where
-        A: for<'a> Action<&'a mut Task, Result<(), crate::task::TaskError>>+ Send + Sync + 'static,
+        A: for<'a> Action<&'a mut Task, Result<(), crate::task::TaskError>> + Send + Sync + 'static,
     {
         self.actions.push_back(Some(Box::new(action)));
     }
@@ -96,7 +97,7 @@ mod tests {
     #[test]
     fn test_run_task() {
         let mut task = Task::new("test".to_string());
-        task.set("hello","hello");
+        task.set("hello", "hello");
         task.do_first(|task: &mut Task| {
             task.get::<&str>("hello")?;
             Ok(())

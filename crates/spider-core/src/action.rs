@@ -3,16 +3,18 @@
 use static_assertions::assert_obj_safe;
 
 /// An action against some type
-pub trait Action<T, R=()> {
+pub trait Action<T, R = ()> {
     /// Executes this action against object T
     fn execute(&self, t: T) -> R;
 }
 assert_obj_safe!(Action<i32>);
 
-pub type BoxAction<T, R=()> = Box<dyn Action<T, R>>;
+pub type BoxAction<T, R = ()> = Box<dyn Action<T, R>>;
 
 impl<T, R, F> Action<T, R> for F
-where F: Fn(T) -> R {
+where
+    F: Fn(T) -> R,
+{
     fn execute(&self, t: T) -> R {
         self(t)
     }
@@ -29,7 +31,7 @@ mod tests {
 
     #[test]
     fn test_execute() {
-        let pow = execute(2, |i| { i * i });
+        let pow = execute(2, |i| i * i);
         assert_eq!(pow, 4);
     }
 }

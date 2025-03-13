@@ -12,7 +12,4 @@ pub trait FileSystemLocation {
     fn is_dir(&self) -> bool {
         self.metadata().is_dir()
     }
-
-
-
 }
