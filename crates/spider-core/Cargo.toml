@@ -8,9 +8,11 @@ description.workspace = true
 categories.workspace = true
 
 [dependencies]
+serde = "1.0.219"
 parking_lot = { workspace = true }
 static_assertions = "1.1.0"
 spider-proc_macros = { version = "0.0.0", path = "../spider-proc_macros"}
 thiserror = "2.0.12"
 bitfield = "0.19.0"
 tracing.workspace = true
+md5 = "0.7.0"

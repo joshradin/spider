@@ -1,12 +1,14 @@
 use crate::action::Action;
+use crate::project::Project;
 use crate::table::Table;
-use crate::{Project, Task, TaskAction, TaskError, error::Result};
+use crate::task::{Task, TaskAction, TaskError};
 use static_assertions::assert_impl_all;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-pub type ConstructTask =
-    dyn for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> Result<()> + Send + Sync;
+pub type ConstructTask = dyn for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> crate::error::Result<()>
+    + Send
+    + Sync;
 
 /// A task prototype
 pub struct TaskPrototype {
@@ -38,7 +40,7 @@ impl TaskPrototype {
     pub fn set_constructor<F>(&mut self, f: F)
     where
         for<'a, 'b, 'c> F:
-            Fn(&'a mut Task, &'b TaskPrototype) -> Result<()> + Send + Sync + 'static,
+            Fn(&'a mut Task, &'b TaskPrototype) -> crate::error::Result<()> + Send + Sync + 'static,
     {
         self.constructor = create_constructor(f)
     }
@@ -62,7 +64,7 @@ impl TaskPrototype {
         self.task_action = Some(Arc::new(a));
     }
 
-    pub(crate) fn build(&self, name: impl AsRef<str>, project: &Project) -> Result<Task> {
+    pub(crate) fn build(&self, name: impl AsRef<str>, project: &Project) -> crate::error::Result<Task> {
         let mut task = Task::new(name.as_ref().to_string());
         task.set_metatable(self.table.clone());
         if let Some(action) = self.task_action() {
@@ -76,7 +78,7 @@ impl TaskPrototype {
 
 fn create_constructor<F>(cons: F) -> Box<ConstructTask>
 where
-    F: for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> Result<()> + Send + Sync + 'static,
+    F: for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> crate::error::Result<()> + Send + Sync + 'static,
 {
     let func = move |task: &mut Task, prototype: &TaskPrototype| {
         if let Some(parent) = &prototype.parent {

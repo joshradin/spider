@@ -1,6 +1,5 @@
 //! A [`Task`] represents a single, atomic instance of work
 
-use crate::Project;
 use crate::action::Action;
 use crate::error::Error;
 use crate::table::Table;

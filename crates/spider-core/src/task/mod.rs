@@ -2,6 +2,7 @@
 
 mod task;
 mod task_prototypes;
+pub mod io;
 
 pub use self::{task::*, task_prototypes::*};
 use crate::error::Error;

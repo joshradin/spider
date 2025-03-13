@@ -10,11 +10,8 @@ pub mod initialization;
 pub mod invocation;
 pub mod lazy;
 pub mod named;
-mod project;
+pub mod project;
 pub mod shared;
 pub mod table;
-mod task;
-
-// crate level re-exports
-#[doc(inline)]
-pub use crate::{project::*, task::*};
+pub mod task;
+pub mod fs;

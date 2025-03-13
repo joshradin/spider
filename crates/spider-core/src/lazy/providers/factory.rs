@@ -71,6 +71,15 @@ impl<P> ProviderFactory<P> {
     }
 }
 
+/// Creates a provider of `t`
+pub(crate) fn provider<T: Clone>(t: T) -> Provider<T> {
+    Provider {
+        kind: Arc::new(
+            ProviderKind::Just(t)
+        )
+    }
+}
+
 pub(crate) fn wrap<T: Clone + Send>(
     provides: impl Provides<Output = T> + Sync + Send + 'static,
 ) -> Provider<T> {
