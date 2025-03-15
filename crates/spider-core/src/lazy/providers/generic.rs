@@ -185,20 +185,7 @@ pub trait Provides {
     }
 }
 
-impl<T: Clone> Provides for T {
-    type Output = T;
 
-    fn provider(&self) -> Provider<Self::Output>
-    where
-        Self::Output: Clone
-    {
-        todo!()
-    }
-
-    fn try_get(&self) -> Option<Self::Output> {
-        todo!()
-    }
-}
 
 #[cfg(test)]
 mod tests {

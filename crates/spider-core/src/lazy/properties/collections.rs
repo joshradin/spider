@@ -6,3 +6,8 @@ pub mod hashset;
 
 #[doc(inline)]
 pub use self::{vec::*, hashmap::*, hashset::*};
+
+pub trait AddProperty<T> {
+    fn add_all(&mut self, item: T);
+}
+

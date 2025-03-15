@@ -3,6 +3,7 @@ use crate::lazy::providers::{wrap, Provider, Provides};
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
+use crate::lazy::properties::collections::VecProperty;
 
 enum PropertyState<T: Clone> {
     None,
@@ -91,11 +92,19 @@ impl<T: Clone + Send + Sync + 'static> SetProperty<&Property<T>> for Property<T>
     }
 }
 
+impl<T: Clone + Send + Sync + 'static> SetProperty<&VecProperty<T>> for Property<Vec<T>> {
+    fn set(&mut self, value: &VecProperty<T>) {
+        *self.inner.lock() = PropertyState::Provider(wrap(value.clone()))
+    }
+}
+
 impl<T: Clone + Send + Sync> SetProperty<&Provider<T>> for Property<T> {
     fn set(&mut self, value: &Provider<T>) {
         *self.inner.lock() = PropertyState::Provider(value.clone())
     }
 }
+
+
 
 mod sealed {
     use crate::lazy::properties::collections::VecProperty;
