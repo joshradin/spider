@@ -2,9 +2,14 @@ use crate::lazy::provider::{BoxProvider, Provider, ProviderSource};
 use crate::shared::Shared;
 use static_assertions::assert_impl_all;
 use std::collections::HashSet;
-use std::marker::PhantomData;
 
-/// A property of type T
+pub mod collections;
+
+/// A [`Provider`] of type `T` that allows for setting contained value.
+///
+/// If not set, no value is returned.
+///
+///
 pub struct Property<T: Sync> {
     inner: Shared<PropertyInner<T>>,
 }
@@ -15,7 +20,7 @@ enum PropertyInner<T: Sync> {
     Provided(BoxProvider<T>),
 }
 
-impl<T: Sync> Property<T> {
+impl<T: Send + Sync + 'static> Property<T> {
     /// Sets the value of this property
     pub fn set(&mut self, value: T) {
         let mut write = self.inner.write();
@@ -23,12 +28,12 @@ impl<T: Sync> Property<T> {
     }
 
     /// Sets the value of this property from a provider
-    pub fn set_from(&mut self, provider: impl Provider<T>)
+    pub fn set_from(&mut self, provider: &impl Provider<T>)
     where
         T: 'static,
     {
         let mut write = self.inner.write();
-        *write = PropertyInner::Provided(BoxProvider::new(provider));
+        *write = PropertyInner::Provided(BoxProvider::new(provider.clone()));
     }
 }
 

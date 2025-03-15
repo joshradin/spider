@@ -1,14 +1,17 @@
 use crate::action::Action;
 use crate::beans::{BeanProvider, FromBeanProvider};
-use crate::lazy::provider::providers::{JustProvider, ProducerProvider, ValueSourceProvider};
 use crate::lazy::provider::Provider;
+use crate::lazy::provider::providers::{JustProvider, ProducerProvider, ValueSourceProvider};
 use crate::lazy::value_source::ValueSource;
 
 /// A provider factory
-#[derive(Default)]
 pub struct ProviderFactory {}
 
 impl ProviderFactory {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
     /// Creates a provider that just returns a given value
     pub fn just<T: Clone + Send + Sync + 'static>(
         &self,
@@ -45,7 +48,7 @@ impl ProviderFactory {
     pub fn value_source_with<Vs, U, A: FnOnce(&mut Vs::Properties)>(
         &self,
         vs: Vs,
-        action: A
+        action: A,
     ) -> impl Provider<Vs::Output> + use<Vs, U, A> + 'static
     where
         Vs: ValueSource + Send + Sync + 'static,

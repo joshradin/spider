@@ -1,21 +1,23 @@
 //! The traits for all value providers.
 
 mod properties;
-mod providers;
 mod provider_factory;
+mod providers;
 
 use crate::lazy::provider::providers::{AndThenProvider, FlatMapProvider, MapProvider};
 pub(crate) use properties::*;
-pub use providers::BoxProvider;
-pub use provider_factory::ProviderFactory;
 use std::collections::HashSet;
+
+pub use self::{properties::*, provider_factory::ProviderFactory, providers::BoxProvider};
 
 /// Source of value in a provider
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ProviderSource {}
+pub enum ProviderSource {
+    Task(),
+}
 
 /// A container object that provides a value of a specific type
-pub trait Provider<T>: Clone + Send + Sync + 'static {
+pub trait Provider<T: Send + Sync + 'static>: Clone + Send + Sync + 'static {
     /// Tries to get the value stored in this container, if available
     fn try_get(&self) -> Option<T>;
     /// Gets the value stored in this container, panicking if no value is present
@@ -67,14 +69,14 @@ impl<T: Send + Sync + 'static, P: Provider<T>> ProviderExt<T> for P {}
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
     use super::*;
     use crate::lazy::provider::ProviderExt;
     use crate::lazy::value_source::ValueSource;
+    use std::time::Instant;
 
     #[test]
     fn test_map_provider() {
-        let factory = ProviderFactory::default();
+        let factory = ProviderFactory::new();
         let provider = factory.just(13);
         let mapped = provider.map(|i| i * i);
         assert_eq!(mapped.get(), 169);
@@ -82,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_flat_map_provider() {
-        let factory = ProviderFactory::default();
+        let factory = ProviderFactory::new();
         let provider = factory.just(13);
         let mapped = provider.flat_map(move |i| factory.just(i * i));
         assert_eq!(mapped.get(), 169);
@@ -90,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_and_then_provider() {
-        let factory = ProviderFactory::default();
+        let factory = ProviderFactory::new();
         let provider = factory.just(13);
         let mapped = provider.and_then(|i| Some(i * i));
         assert_eq!(mapped.get(), 169);
@@ -109,7 +111,7 @@ mod tests {
             }
         }
 
-        let factory = ProviderFactory::default();
+        let factory = ProviderFactory::new();
         let provider = factory.value_source(NowValueSource);
         let p = provider.get();
         let p2 = provider.get();
@@ -129,10 +131,9 @@ mod tests {
             }
         }
 
-        let factory = ProviderFactory::default();
-        let provider = factory.value_source_with(SimpleValueSource(32i32), |mut props| {
-            println!("config")
-        });
+        let factory = ProviderFactory::new();
+        let provider =
+            factory.value_source_with(SimpleValueSource(32i32), |mut props| println!("config"));
         let p = provider.get();
         let p2 = provider.get();
         assert_eq!(p, p2);
@@ -140,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_boxed_flat_map_provider() {
-        let factory = ProviderFactory::default();
+        let factory = ProviderFactory::new();
         let provider = factory.just(13);
         let mapped = BoxProvider::new(provider.flat_map(move |i| factory.just(i * i)));
         assert_eq!(mapped.get(), 169);

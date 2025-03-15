@@ -8,13 +8,5 @@
 //!
 //! |**Feature name**|**Description**|
 //! |-|-|
-//! | fs | enables file system apis |
-
-#[cfg(feature = "fs")]
-pub mod fs {
-    //! Provides file system types for spider
-
-    pub use spider_fs::*;
-}
 
 pub use spider_core::*;

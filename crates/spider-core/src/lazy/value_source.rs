@@ -1,3 +1,5 @@
+//! Defines the [`ValueSource`] trait
+
 /// A value source
 pub trait ValueSource {
     type Properties: Send + Sync;

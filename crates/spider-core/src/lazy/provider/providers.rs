@@ -16,7 +16,7 @@ pub struct BoxProvider<T> {
     sources: Arc<dyn Fn(&Self) -> HashSet<ProviderSource> + Send + Sync>,
 }
 
-impl<T: 'static> BoxProvider<T> {
+impl<T: Send + Sync + 'static> BoxProvider<T> {
     /// Creates a box provider from an existing provider
     pub fn new<P: Provider<T> + Send + Sync + 'static>(provider: P) -> Self {
         let try_get = Self::vtable_try_get::<P>();
@@ -87,7 +87,7 @@ impl<T: Clone + Send + Sync + 'static> Provider<T> for JustProvider<T> {
 }
 
 /// A provider from a provider
-pub struct ProviderProvider<P, T>
+pub struct ProviderProvider<P, T: Send + Sync + 'static>
 where
     P: Provider<T>,
 {
@@ -107,7 +107,7 @@ where
     }
 }
 
-impl<P, T> Clone for ProviderProvider<P, T>
+impl<P, T: Send + Sync + 'static> Clone for ProviderProvider<P, T>
 where
     P: Provider<T>,
 {
@@ -426,7 +426,7 @@ where
     fn try_get(&self) -> Option<Vs::Output> {
         let mut inner = self.inner.write();
         match &*inner {
-            ValueSourceProviderInner::Value(vs) =>  vs.as_ref().cloned(),
+            ValueSourceProviderInner::Value(vs) => vs.as_ref().cloned(),
             ValueSourceProviderInner::ValueSource { .. } => {
                 let ValueSourceProviderInner::ValueSource { vs, props } =
                     std::mem::replace(&mut *inner, ValueSourceProviderInner::Poisoned)

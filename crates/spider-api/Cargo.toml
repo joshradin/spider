@@ -8,11 +8,9 @@ description.workspace = true
 categories.workspace = true
 
 [features]
-default = ["fs"]
-fs = ["dep:spider-fs"]
+default = []
 
 [dependencies]
 spider-core.workspace = true
-spider-fs = { version = "0.0.0", path = "../spider-fs", optional = true }
 
 
