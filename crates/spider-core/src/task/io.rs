@@ -11,9 +11,5 @@ pub struct Digest(md5::Digest);
 /// Represents a task output
 pub trait Output {}
 
-
-
 /// Represents the outputs of a [`Task`](super::Task)
-pub struct TaskOutputs {
-
-}
+pub struct TaskOutputs {}

@@ -64,7 +64,11 @@ impl TaskPrototype {
         self.task_action = Some(Arc::new(a));
     }
 
-    pub(crate) fn build(&self, name: impl AsRef<str>, project: &Project) -> crate::error::Result<Task> {
+    pub(crate) fn build(
+        &self,
+        name: impl AsRef<str>,
+        project: &Project,
+    ) -> crate::error::Result<Task> {
         let mut task = Task::new(name.as_ref().to_string());
         task.set_metatable(self.table.clone());
         if let Some(action) = self.task_action() {
@@ -78,7 +82,10 @@ impl TaskPrototype {
 
 fn create_constructor<F>(cons: F) -> Box<ConstructTask>
 where
-    F: for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> crate::error::Result<()> + Send + Sync + 'static,
+    F: for<'a, 'b, 'c> Fn(&'a mut Task, &'b TaskPrototype) -> crate::error::Result<()>
+        + Send
+        + Sync
+        + 'static,
 {
     let func = move |task: &mut Task, prototype: &TaskPrototype| {
         if let Some(parent) = &prototype.parent {

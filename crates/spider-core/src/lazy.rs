@@ -1,8 +1,6 @@
 //! Lazy apis
 
-pub mod configure;
-pub mod properties;
-pub mod providers;
+pub mod provider;
 pub mod value_source;
 
 #[cfg(test)]

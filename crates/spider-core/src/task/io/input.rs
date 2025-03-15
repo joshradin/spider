@@ -1,5 +1,5 @@
-use serde::Serialize;
 use crate::task::io::Digest;
+use serde::Serialize;
 
 /// Represents a task input
 pub trait Input {
@@ -65,10 +65,6 @@ mod tests {
     #[test]
     fn test_fingerprint() {
         let mut inputs = TaskInputs::new();
-        inputs.property(
-            "value",
-            13
-        );
-
+        inputs.property("value", 13);
     }
 }

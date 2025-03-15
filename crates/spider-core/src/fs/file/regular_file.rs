@@ -2,9 +2,9 @@
 
 use crate::fs::file::FileSystemLocation;
 use std::fmt::{Debug, Formatter};
-use std::{fs, io};
 use std::fs::{File, Metadata};
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 /// A regular file path, it's normalized path if applicable, and its metadata
 #[derive(Clone)]

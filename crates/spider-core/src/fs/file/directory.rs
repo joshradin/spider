@@ -1,12 +1,11 @@
 //! A directory within the file system
 
-use crate::lazy::providers::{Provider, ProviderFactory};
+use crate::fs::file::{FileSystemLocation, RegularFile};
 use std::fmt::{Debug, Formatter};
 use std::fs::Metadata;
 use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
-use crate::fs::file::{FileSystemLocation, RegularFile};
 
 /// simple wrapper over a regular file
 #[derive(Clone)]
@@ -38,7 +37,7 @@ impl TryFrom<RegularFile> for Directory {
 
     fn try_from(value: RegularFile) -> Result<Self, Self::Error> {
         if !value.exists() {
-            return Ok(Directory(value))
+            return Ok(Directory(value));
         }
         if value.metadata()?.is_dir() {
             Ok(Self(value))

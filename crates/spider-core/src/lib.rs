@@ -6,6 +6,7 @@
 pub mod action;
 pub mod beans;
 pub mod error;
+pub mod fs;
 pub mod initialization;
 pub mod invocation;
 pub mod lazy;
@@ -14,4 +15,3 @@ pub mod project;
 pub mod shared;
 pub mod table;
 pub mod task;
-pub mod fs;

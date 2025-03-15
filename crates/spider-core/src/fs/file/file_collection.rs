@@ -1,14 +1,13 @@
 //! A collection of files
 
-use std::fs::File;
-use std::sync::Arc;
 use crate::fs::file::FileSystemLocation;
-use crate::lazy::providers::Provider;
+use crate::lazy::provider::{BoxProvider, Provider};
+use std::sync::Arc;
 
 /// Represents a collection of [`FileSystemLocation`]s.
 // #[derive(Debug)]
 pub struct FileCollection {
-    providers: Vec<Provider<Arc<dyn FileSystemLocation>>>
+    providers: Vec<BoxProvider<Arc<dyn FileSystemLocation>>>,
 }
 //
 // impl IntoIterator for FileCollection {
@@ -19,4 +18,3 @@ pub struct FileCollection {
 //         todo!()
 //     }
 // }
-

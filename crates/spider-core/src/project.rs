@@ -1,5 +1,4 @@
 use crate::beans::BeanProvider;
-use crate::lazy::providers::Provider;
 use crate::shared::{Ref, RefMut, Shared, shared};
 use std::sync::Arc;
 

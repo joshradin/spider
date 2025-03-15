@@ -1,4 +1,3 @@
-use crate::lazy::providers::Provides;
 use std::fs::Metadata;
 use std::path::Path;
 use std::{fs, io};
@@ -22,4 +21,3 @@ pub trait FileSystemLocation {
         self.metadata().map(|m| m.is_dir()).unwrap_or(false)
     }
 }
-
