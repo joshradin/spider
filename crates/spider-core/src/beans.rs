@@ -1,6 +1,7 @@
 //! Simple [`BeanProvider`] and [`Inject`] traits
 
 use crate::named::{CreateNamed, Named};
+use crate::project::Project;
 use spider_proc_macros::all_tuples;
 use std::sync::Arc;
 

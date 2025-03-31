@@ -5,6 +5,7 @@ use crate::lazy::provider::providers::{JustProvider, ProducerProvider, ValueSour
 use crate::lazy::value_source::ValueSource;
 
 /// A provider factory
+#[derive(Clone)]
 pub struct ProviderFactory {}
 
 impl ProviderFactory {

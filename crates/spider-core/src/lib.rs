@@ -6,6 +6,7 @@
 pub mod action;
 pub mod beans;
 pub mod error;
+pub mod finalized;
 pub mod fs;
 pub mod initialization;
 pub mod invocation;

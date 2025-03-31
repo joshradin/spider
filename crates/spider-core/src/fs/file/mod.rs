@@ -1,5 +1,4 @@
 mod directory;
-mod file_collection;
 mod file_system_location;
 mod provider_extensions;
 mod regular_file;

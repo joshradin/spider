@@ -1,70 +1,13 @@
 use crate::lazy::provider::{Provider, ProviderSource};
 use crate::lazy::value_source::ValueSource;
 use crate::shared::Shared;
-use parking_lot::RwLock;
+use futures::future::BoxFuture;
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Pointer;
 use std::marker::PhantomData;
 use std::sync::Arc;
-
-/// A [`Provider`] of `T`
-pub struct BoxProvider<T> {
-    _t: PhantomData<T>,
-    as_any: Arc<dyn Any + Send + Sync>,
-    try_get: Arc<dyn Fn(&Self) -> Option<T> + Send + Sync>,
-    sources: Arc<dyn Fn(&Self) -> HashSet<ProviderSource> + Send + Sync>,
-}
-
-impl<T: Send + Sync + 'static> BoxProvider<T> {
-    /// Creates a box provider from an existing provider
-    pub fn new<P: Provider<T> + Send + Sync + 'static>(provider: P) -> Self {
-        let try_get = Self::vtable_try_get::<P>();
-        let sources = Self::vtable_source::<P>();
-        Self {
-            _t: PhantomData,
-            as_any: Arc::new(provider),
-            try_get: Arc::new(try_get),
-            sources: Arc::new(sources),
-        }
-    }
-
-    fn vtable_try_get<P: Provider<T> + 'static>() -> impl Fn(&Self) -> Option<T> + Send + Sync {
-        |this| {
-            let downcast_ref = this.as_any.downcast_ref::<P>().expect("downcast error");
-            downcast_ref.try_get()
-        }
-    }
-
-    fn vtable_source<P: Provider<T> + 'static>()
-    -> impl Fn(&Self) -> HashSet<ProviderSource> + Send + Sync {
-        |this| {
-            let downcast_ref = this.as_any.downcast_ref::<P>().expect("downcast error");
-            downcast_ref.sources()
-        }
-    }
-}
-
-impl<T> Clone for BoxProvider<T> {
-    fn clone(&self) -> Self {
-        Self {
-            _t: self._t.clone(),
-            as_any: self.as_any.clone(),
-            try_get: self.try_get.clone(),
-            sources: self.sources.clone(),
-        }
-    }
-}
-
-impl<T: Sync + Send + 'static> Provider<T> for BoxProvider<T> {
-    fn try_get(&self) -> Option<T> {
-        (self.try_get)(self)
-    }
-
-    fn sources(&self) -> HashSet<ProviderSource> {
-        (self.sources)(self)
-    }
-}
+use tokio::sync::RwLock;
 
 /// A provider of a value `T`
 #[derive(Clone)]
@@ -77,7 +20,7 @@ impl<T: Clone + Send + Sync + 'static> JustProvider<T> {
 }
 
 impl<T: Clone + Send + Sync + 'static> Provider<T> for JustProvider<T> {
-    fn try_get(&self) -> Option<T> {
+    async fn try_get(&self) -> Option<T> {
         Some(self.0.clone())
     }
 
@@ -123,8 +66,8 @@ impl<P, T: Send + Sync + 'static> Provider<T> for ProviderProvider<P, T>
 where
     P: Provider<T>,
 {
-    fn try_get(&self) -> Option<T> {
-        self.provider.try_get()
+    async fn try_get(&self) -> Option<T> {
+        self.provider.try_get().await
     }
 
     fn sources(&self) -> HashSet<ProviderSource> {
@@ -183,8 +126,8 @@ where
     U: Send + Sync + 'static,
     F: Fn(T) -> U + Send + Sync + 'static,
 {
-    fn try_get(&self) -> Option<U> {
-        let t: T = self.provider.try_get()?;
+    async fn try_get(&self) -> Option<U> {
+        let t: T = self.provider.try_get().await?;
         let u = (&*self.function)(t);
         Some(u)
     }
@@ -233,16 +176,14 @@ where
     P2: Provider<U>,
     F: Fn(T) -> P2 + Send + Sync + 'static,
 {
-    fn try_get(&self) -> Option<U> {
-        let p2 = self.try_get_inner_provider()?;
-        p2.try_get()
+    async fn try_get(&self) -> Option<U> {
+        let p2 = self.try_get_inner_provider().await?;
+        p2.try_get().await
     }
 
     fn sources(&self) -> HashSet<ProviderSource> {
         let mut sources = HashSet::new();
         sources.extend(self.provider.sources());
-        let other_provider = self.get_inner_provider();
-        sources.extend(other_provider.sources());
         sources
     }
 }
@@ -263,13 +204,14 @@ where
         }
     }
 
-    fn get_inner_provider(&self) -> P2 {
+    async fn get_inner_provider(&self) -> P2 {
         self.try_get_inner_provider()
+            .await
             .expect("could not get inner provider")
     }
 
-    fn try_get_inner_provider(&self) -> Option<P2> {
-        let t = self.provider.try_get()?;
+    async fn try_get_inner_provider(&self) -> Option<P2> {
+        let t = self.provider.try_get().await?;
         let p2 = (&*self.function)(t);
         Some(p2)
     }
@@ -327,8 +269,8 @@ where
     P: Provider<T>,
     F: Fn(T) -> Option<U> + Send + Sync + 'static,
 {
-    fn try_get(&self) -> Option<U> {
-        let t = self.provider.try_get()?;
+    async fn try_get(&self) -> Option<U> {
+        let t = self.provider.try_get().await?;
         (&*self.function)(t)
     }
 
@@ -378,7 +320,7 @@ where
     F: Send + Sync + 'static,
     F: Fn() -> T,
 {
-    fn try_get(&self) -> Option<T> {
+    async fn try_get(&self) -> Option<T> {
         let t: T = (self.function)();
         Some(t)
     }
@@ -423,8 +365,8 @@ where
     Vs: ValueSource + Send + Sync + 'static,
     Vs::Output: Clone + Send + Sync + 'static,
 {
-    fn try_get(&self) -> Option<Vs::Output> {
-        let mut inner = self.inner.write();
+    async fn try_get(&self) -> Option<Vs::Output> {
+        let mut inner = self.inner.write().await;
         match &*inner {
             ValueSourceProviderInner::Value(vs) => vs.as_ref().cloned(),
             ValueSourceProviderInner::ValueSource { .. } => {
@@ -433,7 +375,7 @@ where
                 else {
                     unreachable!()
                 };
-                let output = vs.get(&props);
+                let output = vs.get(&props).await;
                 *inner = ValueSourceProviderInner::Value(output.clone());
                 output
             }

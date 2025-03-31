@@ -1,6 +1,7 @@
 //! Generic trait [`Action`] as a way of performing some action against some object
 
 use static_assertions::assert_obj_safe;
+use std::sync::Arc;
 
 /// An action against some type
 pub trait Action<T, R = ()> {
@@ -12,6 +13,15 @@ assert_obj_safe!(Action<i32>);
 pub type BoxAction<T, R = ()> = Box<dyn Action<T, R>>;
 
 impl<T, R, F> Action<T, R> for F
+where
+    F: Fn(T) -> R,
+{
+    fn execute(&self, t: T) -> R {
+        self(t)
+    }
+}
+
+impl<T, R, F> Action<T, R> for Arc<F>
 where
     F: Fn(T) -> R,
 {

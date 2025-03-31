@@ -1,14 +1,9 @@
 //! The traits for all value providers.
 
-mod properties;
-mod provider_factory;
 mod providers;
 
 use crate::lazy::provider::providers::{AndThenProvider, FlatMapProvider, MapProvider};
-pub(crate) use properties::*;
 use std::collections::HashSet;
-
-pub use self::{properties::*, provider_factory::ProviderFactory, providers::BoxProvider};
 
 /// Source of value in a provider
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,14 +14,24 @@ pub enum ProviderSource {
 /// A container object that provides a value of a specific type
 pub trait Provider<T: Send + Sync + 'static>: Clone + Send + Sync + 'static {
     /// Tries to get the value stored in this container, if available
-    fn try_get(&self) -> Option<T>;
+    fn try_get(&self) -> impl Future<Output = Option<T>> + Send;
     /// Gets the value stored in this container, panicking if no value is present
-    fn get(&self) -> T {
-        self.try_get().expect("value is not set")
+    fn get(&self) -> impl Future<Output = T> {
+        async { self.try_get().await.expect("value is not set") }
     }
 
     /// Gets the sources of this provider's value
     fn sources(&self) -> HashSet<ProviderSource>;
+}
+
+/// A property represents a configurable value of type `T`
+pub trait Property<T: Send + Sync + 'static>: Provider<T> {
+    /// Sets the value of this property
+    fn set(&mut self, value: T) -> impl Future<Output = ()> + Send + Sync;
+    /// Sets the value of this property from a provider
+    fn set_from(&mut self, provider: &impl Provider<T>) -> impl Future<Output = ()> + Send + Sync
+    where
+        T: 'static;
 }
 
 /// Provider extension trait
@@ -66,89 +71,3 @@ where
 }
 
 impl<T: Send + Sync + 'static, P: Provider<T>> ProviderExt<T> for P {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lazy::provider::ProviderExt;
-    use crate::lazy::value_source::ValueSource;
-    use std::time::Instant;
-
-    #[test]
-    fn test_map_provider() {
-        let factory = ProviderFactory::new();
-        let provider = factory.just(13);
-        let mapped = provider.map(|i| i * i);
-        assert_eq!(mapped.get(), 169);
-    }
-
-    #[test]
-    fn test_flat_map_provider() {
-        let factory = ProviderFactory::new();
-        let provider = factory.just(13);
-        let mapped = provider.flat_map(move |i| factory.just(i * i));
-        assert_eq!(mapped.get(), 169);
-    }
-
-    #[test]
-    fn test_and_then_provider() {
-        let factory = ProviderFactory::new();
-        let provider = factory.just(13);
-        let mapped = provider.and_then(|i| Some(i * i));
-        assert_eq!(mapped.get(), 169);
-    }
-
-    #[test]
-    fn test_value_source_provider() {
-        #[derive(Default)]
-        struct NowValueSource;
-        impl ValueSource for NowValueSource {
-            type Properties = ();
-            type Output = Instant;
-
-            fn get(self, _properties: &Self::Properties) -> Option<Self::Output> {
-                Some(Instant::now())
-            }
-        }
-
-        let factory = ProviderFactory::new();
-        let provider = factory.value_source(NowValueSource);
-        let p = provider.get();
-        let p2 = provider.get();
-        assert_eq!(p, p2);
-    }
-
-    #[test]
-    fn test_value_source_provider_with() {
-        #[derive(Default)]
-        struct SimpleValueSource<T: Clone>(T);
-        impl<T: Clone + Send + Sync + 'static> ValueSource for SimpleValueSource<T> {
-            type Properties = ();
-            type Output = T;
-
-            fn get(self, _properties: &Self::Properties) -> Option<Self::Output> {
-                Some(self.0.clone())
-            }
-        }
-
-        let factory = ProviderFactory::new();
-        let provider =
-            factory.value_source_with(SimpleValueSource(32i32), |mut props| println!("config"));
-        let p = provider.get();
-        let p2 = provider.get();
-        assert_eq!(p, p2);
-    }
-
-    #[test]
-    fn test_boxed_flat_map_provider() {
-        let factory = ProviderFactory::new();
-        let provider = factory.just(13);
-        let mapped = BoxProvider::new(provider.flat_map(move |i| factory.just(i * i)));
-        assert_eq!(mapped.get(), 169);
-    }
-
-    #[test]
-    fn test_set_property() {
-        // let mut property = Property::new("test");
-    }
-}

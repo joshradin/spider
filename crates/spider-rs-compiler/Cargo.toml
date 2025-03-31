@@ -1,0 +1,12 @@
+[package]
+name = "spider-rs-compiler"
+description = "Runs the spider project compiler for rust files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+categories.workspace = true
+
+[dependencies]
+syn = "2.0.100"
+quote = "1.0.40"

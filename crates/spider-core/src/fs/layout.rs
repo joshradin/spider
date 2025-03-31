@@ -1,21 +1,20 @@
 use crate::fs::file::{Directory, RegularFile};
 use crate::fs::layout::to_regular_file_internal::ProjectFileInternal;
-use crate::lazy::provider::Property;
 
 /// Layout descriptor
 pub struct ProjectLayout {
     project_dir: Directory,
-    build_dir: Property<Directory>,
+    // build_dir: RegularProperty<Directory>,
 }
 
 impl ProjectLayout {
-    /// Creates a new layout directory
-    pub(crate) fn new(project_dir: &Directory, build_dir: &Property<Directory>) -> Self {
-        Self {
-            project_dir: project_dir.clone(),
-            build_dir: build_dir.clone(),
-        }
-    }
+    // /// Creates a new layout directory
+    // pub(crate) fn new(project_dir: &Directory, build_dir: &RegularProperty<Directory>) -> Self {
+    //     Self {
+    //         project_dir: project_dir.clone(),
+    //         build_dir: build_dir.clone(),
+    //     }
+    // }
 
     pub fn file(&self, file: impl ProjectFile) -> RegularFile {
         let path = ProjectFileInternal::get_absolute_path(&file, self);
